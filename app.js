@@ -1,21 +1,27 @@
 import { SUPABASE_URL, SUPABASE_ANON_KEY, MAX_OUT_SECONDS } from './config.js';
 
-// ── Supabase client ──
 const { createClient } = window.supabase;
 const db = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+// ── Color thresholds ──
+// Green:  under 2h (MAX_OUT_SECONDS)
+// Yellow: 2h – 2.5h (MAX_OUT_SECONDS to MAX_OUT_SECONDS + 1800)
+// Red:    over 2.5h
+const WARN_SECONDS = MAX_OUT_SECONDS + 30 * 60;  // 2h 30m
 
 // ── App state ──
 const state = {
   view: 'dashboard',
   running: false,
-  startedAt: null,       // Date when current session started
-  elapsed: 0,            // seconds accumulated in current session
-  ticker: null,          // setInterval handle
-  sessions: [],          // loaded from Supabase
+  startedAt: null,
+  elapsed: 0,
+  ticker: null,
+  sessions: [],
   currentTray: 1,
   calMonth: new Date().getMonth(),
   calYear: new Date().getFullYear(),
   charts: {},
+  pendingDelete: null,
 };
 
 // ── Helpers ──
@@ -29,20 +35,12 @@ function fmt(sec) {
 function fmtDur(sec) {
   const h = Math.floor(sec / 3600);
   const m = Math.floor((sec % 3600) / 60);
-  if (h > 0) return `${h}h ${m}m`;
+  if (h > 0 && m > 0) return `${h}h ${m}m`;
+  if (h > 0) return `${h}h`;
   return `${m}m`;
 }
 
-function todayEST() {
-  return new Date().toLocaleDateString('en-US', { timeZone: 'America/New_York' });
-}
-
-function nowEST() {
-  return new Date().toLocaleTimeString('en-US', { timeZone: 'America/New_York', hour12: true, hour: '2-digit', minute: '2-digit', second: '2-digit' });
-}
-
 function isoDateEST(d = new Date()) {
-  // Returns YYYY-MM-DD in EST
   return d.toLocaleDateString('sv-SE', { timeZone: 'America/New_York' });
 }
 
@@ -54,10 +52,43 @@ function todayTotalSeconds() {
 }
 
 function statusColor(sec) {
-  const ratio = sec / MAX_OUT_SECONDS;
-  if (ratio >= 1) return 'var(--red)';
-  if (ratio >= 0.8) return 'var(--amber)';
+  if (sec >= WARN_SECONDS) return 'var(--red)';
+  if (sec >= MAX_OUT_SECONDS) return 'var(--amber)';
   return 'var(--mint)';
+}
+
+function durClass(sec) {
+  if (sec >= WARN_SECONDS) return 'danger';
+  if (sec >= MAX_OUT_SECONDS) return 'warning';
+  return 'good';
+}
+
+// ── Timer persistence (survives refresh) ──
+function persistTimer() {
+  if (state.running && state.startedAt) {
+    localStorage.setItem('sw_startedAt', state.startedAt.toISOString());
+  } else {
+    localStorage.removeItem('sw_startedAt');
+  }
+}
+
+function restoreTimer() {
+  const saved = localStorage.getItem('sw_startedAt');
+  if (saved) {
+    const startedAt = new Date(saved);
+    // Only restore if started within the last 4 hours (sanity check)
+    if (Date.now() - startedAt.getTime() < 4 * 3600 * 1000) {
+      state.running = true;
+      state.startedAt = startedAt;
+      state.elapsed = Math.floor((Date.now() - startedAt.getTime()) / 1000);
+      state.ticker = setInterval(() => {
+        state.elapsed = Math.floor((Date.now() - state.startedAt.getTime()) / 1000);
+        updateStopwatchDisplay();
+      }, 1000);
+    } else {
+      localStorage.removeItem('sw_startedAt');
+    }
+  }
 }
 
 // ── Supabase ops ──
@@ -85,11 +116,27 @@ async function saveSession(session) {
   await loadSessions();
 }
 
-// ── Stopwatch logic ──
+async function deleteSession(id) {
+  const { error } = await db.from('sessions').delete().eq('id', id);
+  if (error) { console.error('Delete error:', error); return; }
+  await loadSessions();
+  hideToast();
+  if (state.view === 'log') renderLog();
+  if (state.view === 'dashboard') {
+    document.getElementById('recent-sessions').innerHTML = renderRecentSessions();
+    updateStopwatchDisplay();
+  }
+  if (state.view === 'graphs') renderGraphs();
+  if (state.view === 'calendar') renderCalendar();
+}
+
+// ── Stopwatch ──
 function startTimer() {
   if (state.running) return;
   state.running = true;
   state.startedAt = new Date();
+  state.elapsed = 0;
+  persistTimer();
   state.ticker = setInterval(() => {
     state.elapsed = Math.floor((Date.now() - state.startedAt.getTime()) / 1000);
     updateStopwatchDisplay();
@@ -106,6 +153,7 @@ async function stopTimer() {
   const startedAt = state.startedAt;
   state.elapsed = 0;
   state.startedAt = null;
+  persistTimer();
 
   const session = {
     started_at: startedAt.toISOString(),
@@ -123,15 +171,20 @@ async function stopTimer() {
   if (state.view === 'log') renderLog();
   if (state.view === 'graphs') renderGraphs();
   if (state.view === 'calendar') renderCalendar();
+  if (state.view === 'dashboard') {
+    document.getElementById('recent-sessions').innerHTML = renderRecentSessions();
+  }
 }
 
 function resetTimer() {
   if (state.running) return;
   state.elapsed = 0;
+  persistTimer();
   updateStopwatchDisplay();
+  renderStopwatchButtons();
 }
 
-// ── Ring arc ──
+// ── Ring + display ──
 function updateStopwatchDisplay() {
   const display = document.getElementById('sw-display');
   const sub = document.getElementById('sw-sub');
@@ -141,15 +194,15 @@ function updateStopwatchDisplay() {
   const sec = state.elapsed;
   display.textContent = fmt(sec);
 
-  // Today total including current session
   const todayTotal = todayTotalSeconds() + sec;
+  // Ring fills to MAX_OUT_SECONDS then stops at full; color changes past that
   const ratio = Math.min(todayTotal / MAX_OUT_SECONDS, 1);
   const circumference = 2 * Math.PI * 80;
   ring.style.strokeDasharray = `${circumference}`;
   ring.style.strokeDashoffset = `${circumference * (1 - ratio)}`;
   ring.style.stroke = statusColor(todayTotal);
 
-  if (sub) sub.textContent = `Today: ${fmtDur(todayTotal)} / 2h limit`;
+  if (sub) sub.textContent = `Today: ${fmtDur(todayTotal)} out`;
   renderStats();
   renderAlert(todayTotal);
 }
@@ -158,17 +211,23 @@ function renderAlert(todayTotal) {
   const el = document.getElementById('sw-alert');
   if (!el) return;
   const remaining = MAX_OUT_SECONDS - todayTotal;
-  if (todayTotal >= MAX_OUT_SECONDS) {
+  const over = todayTotal - MAX_OUT_SECONDS;
+
+  if (todayTotal >= WARN_SECONDS) {
     el.className = 'alert-bar danger';
-    el.innerHTML = `⚠ You've exceeded your 2-hour limit today by ${fmtDur(todayTotal - MAX_OUT_SECONDS)}. Put your aligners back in!`;
+    el.innerHTML = `🚨 <strong>${fmtDur(todayTotal - MAX_OUT_SECONDS)} over limit</strong> — put your aligners back in now!`;
+    el.style.display = 'flex';
+  } else if (todayTotal >= MAX_OUT_SECONDS) {
+    el.className = 'alert-bar warning';
+    el.innerHTML = `⚠️ Limit reached — ${fmtDur(over)} over. You have 30 min before the red zone.`;
     el.style.display = 'flex';
   } else if (remaining <= 900) {
     el.className = 'alert-bar warning';
-    el.innerHTML = `⚡ Only ${fmtDur(remaining)} remaining today — ${fmtDur(todayTotal)} used.`;
+    el.innerHTML = `⚡ Only <strong>${fmtDur(remaining)}</strong> left today — wrap up soon.`;
     el.style.display = 'flex';
   } else if (state.running) {
     el.className = 'alert-bar success';
-    el.innerHTML = `✓ Timer running — ${fmtDur(remaining)} remaining today.`;
+    el.innerHTML = `▶ Running — <strong>${fmtDur(remaining)}</strong> remaining today.`;
     el.style.display = 'flex';
   } else {
     el.style.display = 'none';
@@ -178,17 +237,16 @@ function renderAlert(todayTotal) {
 function renderStats() {
   const todayTotal = todayTotalSeconds() + (state.running ? state.elapsed : 0);
   const remaining = Math.max(0, MAX_OUT_SECONDS - todayTotal);
-  const sessions7 = state.sessions.filter(s => {
-    const d = new Date(s.started_at);
-    return (Date.now() - d.getTime()) < 7 * 86400000;
-  });
+  const sessions7 = state.sessions.filter(s =>
+    (Date.now() - new Date(s.started_at).getTime()) < 7 * 86400000
+  );
   const avg7 = sessions7.length > 0
     ? sessions7.reduce((a, b) => a + b.duration_seconds, 0) / 7
     : 0;
 
   const todayEl = document.getElementById('stat-today');
-  const remEl = document.getElementById('stat-remaining');
-  const avgEl = document.getElementById('stat-avg');
+  const remEl   = document.getElementById('stat-remaining');
+  const avgEl   = document.getElementById('stat-avg');
   if (todayEl) todayEl.textContent = fmtDur(todayTotal);
   if (remEl) {
     remEl.textContent = remaining > 0 ? fmtDur(remaining) : 'OVER';
@@ -198,7 +256,7 @@ function renderStats() {
 }
 
 function renderStopwatchButtons() {
-  const btn = document.getElementById('sw-main-btn');
+  const btn      = document.getElementById('sw-main-btn');
   const resetBtn = document.getElementById('sw-reset-btn');
   if (!btn) return;
   if (state.running) {
@@ -210,17 +268,49 @@ function renderStopwatchButtons() {
     btn.className = 'sw-btn sw-btn-primary';
     btn.onclick = startTimer;
   }
-  if (resetBtn) resetBtn.disabled = state.running || state.elapsed === 0;
+  if (resetBtn) {
+    resetBtn.disabled = state.running || state.elapsed === 0;
+  }
 }
 
-// ── Views ──
-function renderNav() {
+// ── Delete toast ──
+function showDeleteToast(id, label) {
+  hideToast();
+  state.pendingDelete = id;
+  const t = document.createElement('div');
+  t.className = 'toast';
+  t.id = 'delete-toast';
+  t.innerHTML = `
+    <span>Delete session ${label}?</span>
+    <button class="toast-confirm" onclick="app.confirmDelete()">Delete</button>
+    <button class="toast-cancel" onclick="app.hideToast()">Cancel</button>
+  `;
+  document.body.appendChild(t);
+  setTimeout(() => { if (document.getElementById('delete-toast')) hideToast(); }, 6000);
+}
+
+function hideToast() {
+  const t = document.getElementById('delete-toast');
+  if (t) t.remove();
+  state.pendingDelete = null;
+}
+
+// ── Sidebar / nav ──
+function renderNav(mobile = false) {
   const items = [
     { id: 'dashboard', label: 'Dashboard', icon: '⊞' },
-    { id: 'log', label: 'Session Log', icon: '☰' },
-    { id: 'graphs', label: 'Graphs', icon: '⌇' },
-    { id: 'calendar', label: 'Calendar', icon: '▦' },
+    { id: 'log',       label: 'Log',       icon: '☰' },
+    { id: 'graphs',    label: 'Graphs',    icon: '⌇' },
+    { id: 'calendar',  label: 'Calendar',  icon: '▦' },
   ];
+  if (mobile) {
+    return items.map(i => `
+      <div class="mobile-nav-item ${state.view === i.id ? 'active' : ''}" onclick="app.navigate('${i.id}')">
+        <span class="mob-icon">${i.icon}</span>
+        <span>${i.label}</span>
+      </div>
+    `).join('');
+  }
   return items.map(i => `
     <div class="nav-item ${state.view === i.id ? 'active' : ''}" onclick="app.navigate('${i.id}')">
       <span class="nav-icon">${i.icon}</span> ${i.label}
@@ -235,7 +325,7 @@ function renderSidebar() {
         <h1>Invisalign</h1>
         <p>22hr wear tracker</p>
       </div>
-      ${renderNav()}
+      ${renderNav(false)}
       <div class="tray-badge">
         <label>Current Tray</label>
         <div class="tray-input-wrap">
@@ -243,10 +333,67 @@ function renderSidebar() {
           <button class="tray-save-btn" onclick="app.saveTrayNum()">Save</button>
         </div>
       </div>
-    </aside>
-  `;
+    </aside>`;
 }
 
+function renderMobileHeader() {
+  return `
+    <header class="mobile-header">
+      <span class="mobile-header-title">Invisalign</span>
+      <button class="mobile-tray-btn" onclick="app.openTrayModal()">
+        Tray <span>#${state.currentTray}</span>
+      </button>
+    </header>`;
+}
+
+function renderMobileNav() {
+  return `
+    <nav class="mobile-nav">
+      <div class="mobile-nav-inner">${renderNav(true)}</div>
+    </nav>`;
+}
+
+// ── Tray modal (mobile) ──
+function openTrayModal() {
+  const overlay = document.createElement('div');
+  overlay.className = 'tray-modal-overlay';
+  overlay.id = 'tray-modal';
+  overlay.innerHTML = `
+    <div class="tray-modal">
+      <h3>Update tray number</h3>
+      <div class="tray-modal-row">
+        <input class="tray-input" type="number" id="tray-modal-input" min="1" max="99" value="${state.currentTray}" style="width:80px;font-size:24px;" />
+        <button class="tray-modal-save" onclick="app.saveTrayModal()">Save</button>
+        <button class="tray-modal-cancel" onclick="app.closeTrayModal()">Cancel</button>
+      </div>
+    </div>`;
+  overlay.onclick = e => { if (e.target === overlay) app.closeTrayModal(); };
+  document.body.appendChild(overlay);
+  setTimeout(() => document.getElementById('tray-modal-input')?.focus(), 50);
+}
+
+function closeTrayModal() {
+  document.getElementById('tray-modal')?.remove();
+}
+
+async function saveTrayModal() {
+  const v = parseInt(document.getElementById('tray-modal-input')?.value);
+  if (v > 0) {
+    await saveTray(v);
+    closeTrayModal();
+    // Update mobile header tray display
+    const btn = document.querySelector('.mobile-tray-btn span');
+    if (btn) btn.textContent = `#${v}`;
+    // Update sidebar tray display
+    const sideInput = document.getElementById('tray-input');
+    if (sideInput) sideInput.value = v;
+    // Update stopwatch status
+    const status = document.querySelector('.stopwatch-status span:first-child');
+    if (status) status.textContent = `#${v}`;
+  }
+}
+
+// ── Views ──
 function renderDashboard() {
   const circumference = 2 * Math.PI * 80;
   const todayTotal = todayTotalSeconds() + (state.running ? state.elapsed : 0);
@@ -263,16 +410,18 @@ function renderDashboard() {
             <circle class="ring-fill" id="sw-ring" cx="100" cy="100" r="80"
               stroke-dasharray="${circumference}"
               stroke-dashoffset="${circumference * (1 - ratio)}"
-              style="stroke:${statusColor(todayTotal)}"
-            />
+              style="stroke:${statusColor(todayTotal)}"/>
           </svg>
           <div class="stopwatch-display" id="sw-display">${fmt(state.elapsed)}</div>
-          <div class="stopwatch-sub" id="sw-sub">Today: ${fmtDur(todayTotal)} / 2h limit</div>
+          <div class="stopwatch-sub" id="sw-sub">Today: ${fmtDur(todayTotal)} out</div>
         </div>
 
         <p class="stopwatch-status">
-          Tray <span>#${state.currentTray}</span> &nbsp;·&nbsp;
-          ${state.running ? `<span>Running since ${nowEST()}</span>` : 'Ready'}
+          Tray <span>#${state.currentTray}</span>
+          &nbsp;·&nbsp;
+          ${state.running
+            ? `<span>Running since ${state.startedAt?.toLocaleTimeString('en-US', { timeZone: 'America/New_York', hour12: true, hour: '2-digit', minute: '2-digit' })}</span>`
+            : 'Ready'}
         </p>
 
         <div class="sw-btn-row">
@@ -287,44 +436,46 @@ function renderDashboard() {
         </div>
       </div>
 
-      <div class="card stats-row" style="display:grid; grid-template-columns: repeat(3,1fr); gap:0; padding: 20px 0;">
-        <div class="stat-card">
-          <div class="stat-label">Today out</div>
-          <div class="stat-value mint" id="stat-today">${fmtDur(todayTotal)}</div>
-        </div>
-        <div class="stat-card" style="border-left: 1px solid var(--border); border-right: 1px solid var(--border);">
-          <div class="stat-label">Remaining</div>
-          <div class="stat-value ${Math.max(0,MAX_OUT_SECONDS-todayTotal) <= 0 ? 'red' : Math.max(0,MAX_OUT_SECONDS-todayTotal) <= 1800 ? 'amber' : 'mint'}" id="stat-remaining">${fmtDur(Math.max(0,MAX_OUT_SECONDS-todayTotal))}</div>
-        </div>
-        <div class="stat-card">
-          <div class="stat-label">7-day avg</div>
-          <div class="stat-value" id="stat-avg">—</div>
+      <div class="card" style="padding:20px 0; grid-column: 1 / -1;">
+        <div style="display:grid; grid-template-columns: repeat(3,1fr);">
+          <div class="stat-card">
+            <div class="stat-label">Today out</div>
+            <div class="stat-value mint" id="stat-today">${fmtDur(todayTotal)}</div>
+          </div>
+          <div class="stat-card" style="border-left:1px solid var(--border);border-right:1px solid var(--border);">
+            <div class="stat-label">Remaining</div>
+            <div class="stat-value ${durClass(todayTotal) === 'good' ? 'mint' : durClass(todayTotal) === 'warning' ? 'amber' : 'red'}" id="stat-remaining">${Math.max(0, MAX_OUT_SECONDS - todayTotal) > 0 ? fmtDur(Math.max(0, MAX_OUT_SECONDS - todayTotal)) : 'OVER'}</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-label">7-day avg</div>
+            <div class="stat-value" id="stat-avg">—</div>
+          </div>
         </div>
       </div>
 
-      <div class="card">
+      <div class="card" style="grid-column: 1 / -1;">
         <div class="section-title">Recent Sessions</div>
-        ${renderRecentSessions()}
+        <div id="recent-sessions">${renderRecentSessions()}</div>
       </div>
-    </div>
-  `;
+    </div>`;
 }
 
 function renderRecentSessions() {
   const recent = state.sessions.slice(0, 5);
   if (!recent.length) return `<p class="empty-state">No sessions yet. Start the timer!</p>`;
   return recent.map(s => `
-    <div style="display:flex; justify-content:space-between; align-items:center; padding: 10px 0; border-bottom: 1px solid var(--border);">
+    <div style="display:flex;justify-content:space-between;align-items:center;padding:10px 0;border-bottom:1px solid var(--border);">
       <div>
-        <span style="font-size:13px; color:var(--text);">${s.date_est}</span>
-        <span style="font-size:12px; color:var(--text-3); margin-left:8px;">${s.time_est || ''}</span>
+        <span style="font-size:13px;color:var(--text);">${s.date_est}</span>
+        <span style="font-size:12px;color:var(--text-3);margin-left:8px;">${s.time_est || ''}</span>
       </div>
-      <div style="display:flex; gap:12px; align-items:center;">
-        <span class="log-table tray-pill">Tray ${s.tray_number}</span>
-        <span style="font-family:'DM Mono',monospace; font-size:14px; color:var(--mint);">${fmtDur(s.duration_seconds)}</span>
+      <div style="display:flex;gap:10px;align-items:center;">
+        <span class="tray-pill">T${s.tray_number}</span>
+        <span style="font-family:'DM Mono',monospace;font-size:14px;color:${statusColor(s.duration_seconds)}">${fmtDur(s.duration_seconds)}</span>
+        <button class="delete-btn" onclick="app.askDelete('${s.id}','${s.date_est}')" title="Delete">✕</button>
       </div>
     </div>
-  `).join('');
+  `).join('') + `<div style="border-bottom:none;height:1px"></div>`;
 }
 
 function renderLog() {
@@ -333,41 +484,56 @@ function renderLog() {
   let sessions = [...state.sessions];
   if (filterVal) {
     sessions = sessions.filter(s =>
-      s.date_est?.includes(filterVal) ||
-      String(s.tray_number)?.includes(filterVal)
+      s.date_est?.includes(filterVal) || String(s.tray_number)?.includes(filterVal)
     );
   }
+
+  const tableRows = sessions.map(s => `
+    <tr>
+      <td class="mono">${s.date_est || '—'}</td>
+      <td>${s.time_est || '—'}</td>
+      <td class="mono" style="color:${statusColor(s.duration_seconds)}">${fmtDur(s.duration_seconds)}</td>
+      <td><span class="tray-pill">T${s.tray_number}</span></td>
+      <td><button class="delete-btn" onclick="app.askDelete('${s.id}','${s.date_est}')" title="Delete session">✕</button></td>
+    </tr>
+  `).join('');
+
+  const mobileCards = sessions.map(s => `
+    <div class="log-card">
+      <div class="log-card-left">
+        <div class="log-card-date">${s.date_est || '—'}</div>
+        <div class="log-card-time">${s.time_est || '—'}</div>
+      </div>
+      <div class="log-card-right">
+        <div class="log-card-dur" style="color:${statusColor(s.duration_seconds)}">${fmtDur(s.duration_seconds)}</div>
+        <div style="display:flex;gap:6px;align-items:center;">
+          <span class="tray-pill">T${s.tray_number}</span>
+          <button class="delete-btn" onclick="app.askDelete('${s.id}','${s.date_est}')" title="Delete">✕</button>
+        </div>
+      </div>
+    </div>
+  `).join('');
 
   document.querySelector('.main').innerHTML = `
     <div class="page-title">Session Log</div>
     <div class="log-filters">
       <input class="filter-input" placeholder="Filter by date or tray..." id="log-filter"
-        value="${filterVal}" oninput="app.filterLog()" style="width:220px" />
-      <span style="font-size:12px; color:var(--text-3);">${sessions.length} sessions</span>
+        value="${filterVal}" oninput="app.filterLog()" />
+      <span style="font-size:12px;color:var(--text-3);white-space:nowrap;">${sessions.length} sessions</span>
     </div>
-    <div class="card" style="padding:0; overflow:hidden;">
-      ${sessions.length === 0 ? `<p class="empty-state">No sessions found.</p>` : `
-      <table class="log-table">
-        <thead>
-          <tr>
-            <th>Date (EST)</th>
-            <th>Start Time</th>
-            <th>Duration</th>
-            <th>Tray</th>
-          </tr>
-        </thead>
-        <tbody>
-          ${sessions.map(s => `
-            <tr>
-              <td class="mono">${s.date_est || '—'}</td>
-              <td>${s.time_est || '—'}</td>
-              <td class="mono" style="color:${s.duration_seconds > MAX_OUT_SECONDS ? 'var(--red)' : 'var(--mint)'}">${fmtDur(s.duration_seconds)}</td>
-              <td><span class="tray-pill">Tray ${s.tray_number}</span></td>
-            </tr>
-          `).join('')}
-        </tbody>
-      </table>`}
-    </div>
+    ${sessions.length === 0
+      ? `<div class="card"><p class="empty-state">No sessions found.</p></div>`
+      : `
+        <div class="log-table-wrap card" style="padding:0;overflow:hidden;">
+          <table class="log-table">
+            <thead><tr>
+              <th>Date</th><th>Start Time</th><th>Duration</th><th>Tray</th><th></th>
+            </tr></thead>
+            <tbody>${tableRows}</tbody>
+          </table>
+        </div>
+        <div class="log-cards">${mobileCards}</div>
+      `}
   `;
 }
 
@@ -380,75 +546,56 @@ function renderGraphs() {
         <div class="chart-canvas-wrap"><canvas id="chart-daily"></canvas></div>
       </div>
       <div class="card">
-        <div class="section-title">Sessions per day of week</div>
+        <div class="section-title">By day of week</div>
         <div class="chart-canvas-wrap"><canvas id="chart-dow"></canvas></div>
       </div>
       <div class="card">
-        <div class="section-title">Out-time distribution</div>
+        <div class="section-title">Session duration mix</div>
         <div class="chart-canvas-wrap"><canvas id="chart-dist"></canvas></div>
       </div>
-    </div>
-  `;
+    </div>`;
   drawCharts();
 }
 
 function drawCharts() {
-  // ── Daily out-time (last 30 days) ──
+  // Daily out-time last 30 days
   const last30 = {};
   for (let i = 29; i >= 0; i--) {
-    const d = new Date();
-    d.setDate(d.getDate() - i);
+    const d = new Date(); d.setDate(d.getDate() - i);
     last30[isoDateEST(d)] = 0;
   }
   state.sessions.forEach(s => {
-    if (last30.hasOwnProperty(s.date_est)) {
-      last30[s.date_est] += s.duration_seconds / 60; // minutes
-    }
+    if (last30.hasOwnProperty(s.date_est)) last30[s.date_est] += s.duration_seconds / 60;
   });
-  const labels30 = Object.keys(last30).map(d => {
-    const [y, m, day] = d.split('-');
-    return `${parseInt(m)}/${parseInt(day)}`;
-  });
+  const labels30 = Object.keys(last30).map(d => { const [,m,day] = d.split('-'); return `${parseInt(m)}/${parseInt(day)}`; });
   const data30 = Object.values(last30);
+
+  const barColor = v => v > WARN_SECONDS/60 ? 'rgba(224,92,92,0.75)' : v > MAX_OUT_SECONDS/60 ? 'rgba(245,166,35,0.75)' : 'rgba(0,201,167,0.7)';
 
   if (state.charts.daily) state.charts.daily.destroy();
   state.charts.daily = new Chart(document.getElementById('chart-daily'), {
     type: 'bar',
-    data: {
-      labels: labels30,
-      datasets: [{
-        data: data30,
-        backgroundColor: data30.map(v => v > 120 ? 'rgba(224,92,92,0.7)' : v > 96 ? 'rgba(245,166,35,0.7)' : 'rgba(0,201,167,0.7)'),
-        borderRadius: 4,
-      }]
-    },
+    data: { labels: labels30, datasets: [{ data: data30, backgroundColor: data30.map(barColor), borderRadius: 4 }] },
     options: {
-      plugins: { legend: { display: false } },
+      plugins: { legend: { display: false }, tooltip: { callbacks: { label: ctx => `${Math.round(ctx.raw)}m` } } },
       scales: {
-        x: { ticks: { color: '#8896A5', font: { size: 10 } }, grid: { color: 'rgba(255,255,255,0.04)' } },
+        x: { ticks: { color: '#8896A5', font: { size: 10 }, maxRotation: 0 }, grid: { color: 'rgba(255,255,255,0.04)' } },
         y: { ticks: { color: '#8896A5', callback: v => `${v}m` }, grid: { color: 'rgba(255,255,255,0.06)' } }
       },
       responsive: true, maintainAspectRatio: false,
     }
   });
 
-  // ── Sessions per day of week ──
+  // Day of week
   const dow = Array(7).fill(0);
-  state.sessions.forEach(s => {
-    const d = new Date(s.started_at);
-    dow[d.getDay()] += s.duration_seconds / 60;
-  });
-  const dowLabels = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+  state.sessions.forEach(s => { dow[new Date(s.started_at).getDay()] += s.duration_seconds / 60; });
 
   if (state.charts.dow) state.charts.dow.destroy();
   state.charts.dow = new Chart(document.getElementById('chart-dow'), {
     type: 'bar',
-    data: {
-      labels: dowLabels,
-      datasets: [{ data: dow, backgroundColor: 'rgba(0,201,167,0.6)', borderRadius: 4 }]
-    },
+    data: { labels: ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'], datasets: [{ data: dow, backgroundColor: 'rgba(0,201,167,0.6)', borderRadius: 4 }] },
     options: {
-      plugins: { legend: { display: false } },
+      plugins: { legend: { display: false }, tooltip: { callbacks: { label: ctx => `${Math.round(ctx.raw)}m` } } },
       scales: {
         x: { ticks: { color: '#8896A5', font: { size: 11 } }, grid: { display: false } },
         y: { ticks: { color: '#8896A5', callback: v => `${Math.round(v)}m` }, grid: { color: 'rgba(255,255,255,0.06)' } }
@@ -457,7 +604,7 @@ function drawCharts() {
     }
   });
 
-  // ── Duration distribution ──
+  // Duration distribution
   const buckets = { '<15m': 0, '15–30m': 0, '30–60m': 0, '60–90m': 0, '>90m': 0 };
   state.sessions.forEach(s => {
     const m = s.duration_seconds / 60;
@@ -473,28 +620,20 @@ function drawCharts() {
     type: 'doughnut',
     data: {
       labels: Object.keys(buckets),
-      datasets: [{
-        data: Object.values(buckets),
-        backgroundColor: ['rgba(0,201,167,0.8)','rgba(0,201,167,0.55)','rgba(245,166,35,0.7)','rgba(245,166,35,0.9)','rgba(224,92,92,0.8)'],
-        borderWidth: 0,
-      }]
+      datasets: [{ data: Object.values(buckets), backgroundColor: ['rgba(0,201,167,0.8)','rgba(0,201,167,0.5)','rgba(245,166,35,0.65)','rgba(245,166,35,0.9)','rgba(224,92,92,0.8)'], borderWidth: 0 }]
     },
     options: {
       plugins: { legend: { labels: { color: '#8896A5', font: { size: 11 } } } },
-      responsive: true, maintainAspectRatio: false,
-      cutout: '60%',
+      responsive: true, maintainAspectRatio: false, cutout: '60%',
     }
   });
 }
 
 function renderCalendar() {
-  const year = state.calYear;
-  const month = state.calMonth;
+  const year = state.calYear, month = state.calMonth;
   const monthName = new Date(year, month, 1).toLocaleString('default', { month: 'long' });
 
-  // Build daily totals
-  const dailyTotals = {};
-  const dailyTrays = {};
+  const dailyTotals = {}, dailyTrays = {};
   state.sessions.forEach(s => {
     if (!s.date_est) return;
     const [y, m] = s.date_est.split('-').map(Number);
@@ -508,25 +647,19 @@ function renderCalendar() {
   const daysInMonth = new Date(year, month + 1, 0).getDate();
   const todayStr = isoDateEST();
 
-  let cells = '';
-  for (let i = 0; i < firstDay; i++) {
-    cells += `<div class="cal-cell empty"></div>`;
-  }
-
+  let cells = Array(firstDay).fill('<div class="cal-cell empty"></div>').join('');
   for (let d = 1; d <= daysInMonth; d++) {
-    const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+    const dateStr = `${year}-${String(month+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
     const isToday = dateStr === todayStr;
     const sec = dailyTotals[dateStr] || 0;
-    const durClass = sec === 0 ? '' : sec > MAX_OUT_SECONDS ? 'danger' : sec > MAX_OUT_SECONDS * 0.8 ? 'warning' : 'good';
+    const dc = sec === 0 ? '' : durClass(sec);
     const tray = dailyTrays[dateStr];
-
     cells += `
       <div class="cal-cell ${isToday ? 'today' : ''}">
         <div class="cal-date">${d}</div>
-        ${sec > 0 ? `<div class="cal-dur ${durClass}">${fmtDur(sec)}</div>` : ''}
+        ${sec > 0 ? `<div class="cal-dur ${dc}">${fmtDur(sec)}</div>` : ''}
         ${tray ? `<div class="cal-tray">T${tray}</div>` : ''}
-      </div>
-    `;
+      </div>`;
   }
 
   document.querySelector('.main').innerHTML = `
@@ -541,29 +674,27 @@ function renderCalendar() {
         ${['Sun','Mon','Tue','Wed','Thu','Fri','Sat'].map(d => `<div class="cal-day-name">${d}</div>`).join('')}
         ${cells}
       </div>
-      <div style="display:flex; gap:16px; margin-top:16px; font-size:12px; color:var(--text-3);">
-        <span><span style="color:var(--mint)">■</span> Under limit</span>
-        <span><span style="color:var(--amber)">■</span> Near limit</span>
-        <span><span style="color:var(--red)">■</span> Over limit</span>
+      <div class="cal-legend">
+        <span><span style="color:var(--mint)">■</span> Under 2h</span>
+        <span><span style="color:var(--amber)">■</span> 2h – 2h30m</span>
+        <span><span style="color:var(--red)">■</span> Over 2h30m</span>
       </div>
-    </div>
-  `;
+    </div>`;
 }
 
-// ── Render ──
+// ── Full render ──
 function render() {
-  const app = document.getElementById('app');
-  const mainContent = state.view === 'dashboard' ? renderDashboard()
-    : state.view === 'log' ? getLogHTML()
-    : state.view === 'graphs' ? getGraphsHTML()
-    : getCalendarHTML();
-
-  app.innerHTML = `
+  document.getElementById('app').innerHTML = `
     <div class="layout">
       ${renderSidebar()}
-      <main class="main">${mainContent}</main>
+      <div style="flex:1;display:flex;flex-direction:column;min-width:0;">
+        ${renderMobileHeader()}
+        <main class="main">
+          ${state.view === 'dashboard' ? renderDashboard() : ''}
+        </main>
+      </div>
     </div>
-  `;
+    ${renderMobileNav()}`;
 
   if (state.view === 'dashboard') {
     updateStopwatchDisplay();
@@ -578,46 +709,36 @@ function render() {
   }
 }
 
-function getLogHTML() { return `<div class="page-title">Session Log</div><div id="log-content"></div>`; }
-function getGraphsHTML() { return `<div class="page-title">Graphs</div>`; }
-function getCalendarHTML() { return `<div class="page-title">Calendar</div>`; }
-
-// ── Public API (used in onclick) ──
+// ── Public API ──
 window.app = {
   start: startTimer,
   stop: stopTimer,
   reset: resetTimer,
-  navigate(view) {
-    state.view = view;
-    render();
-  },
+  navigate(view) { state.view = view; render(); },
   filterLog() { renderLog(); },
-  calPrev() {
-    state.calMonth--;
-    if (state.calMonth < 0) { state.calMonth = 11; state.calYear--; }
-    renderCalendar();
-  },
-  calNext() {
-    state.calMonth++;
-    if (state.calMonth > 11) { state.calMonth = 0; state.calYear++; }
-    renderCalendar();
-  },
+  calPrev() { state.calMonth--; if (state.calMonth < 0) { state.calMonth = 11; state.calYear--; } renderCalendar(); },
+  calNext() { state.calMonth++; if (state.calMonth > 11) { state.calMonth = 0; state.calYear++; } renderCalendar(); },
   async saveTrayNum() {
     const v = parseInt(document.getElementById('tray-input')?.value);
     if (v > 0) {
       await saveTray(v);
-      const badge = document.querySelector('.sidebar-logo p');
-      if (badge) badge.textContent = `Tray ${v} · 22hr tracker`;
       const btn = document.querySelector('.tray-save-btn');
-      if (btn) { btn.textContent = '✓'; setTimeout(() => btn.textContent = 'Save', 1200); }
+      if (btn) { btn.textContent = '✓ Saved'; setTimeout(() => btn.textContent = 'Save', 1500); }
     }
   },
+  openTrayModal,
+  closeTrayModal,
+  saveTrayModal,
+  askDelete(id, label) { showDeleteToast(id, label); },
+  confirmDelete() { if (state.pendingDelete) deleteSession(state.pendingDelete); },
+  hideToast,
 };
 
 // ── Boot ──
 async function init() {
   try {
     await Promise.all([loadSessions(), loadTray()]);
+    restoreTimer();
     render();
   } catch (e) {
     document.getElementById('app').innerHTML = `
