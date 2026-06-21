@@ -1,0 +1,26 @@
+{
+  "name": "Invisalign Tracker",
+  "short_name": "Aligners",
+  "description": "Track your daily Invisalign wear time",
+  "start_url": "./",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "background_color": "#F5F3EF",
+  "theme_color": "#5BAFD6",
+  "icons": [
+    {
+      "src": "icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ],
+  "categories": ["health", "lifestyle"],
+  "screenshots": []
+}

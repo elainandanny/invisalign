@@ -323,3 +323,63 @@ textarea.form-input { resize:vertical; min-height:80px; }
   .log-cards { display:none; }
   .log-table-wrap { display:block; }
 }
+
+/* ── Offline / Sync UI ── */
+.offline-dot {
+  width: 8px; height: 8px; border-radius: 50%;
+  background: var(--butter); display: inline-block;
+  animation: pulse 1.5s ease-in-out infinite;
+}
+@keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.4} }
+
+.sync-badge {
+  margin: 8px 12px; padding: 10px 12px;
+  background: var(--but-lt); border: 1px solid rgba(212,168,67,0.35);
+  border-radius: var(--radius-sm); font-size: 12px; color: #9A7018;
+  display: flex; flex-direction: column; gap: 6px;
+}
+.sync-now-btn {
+  background: var(--butter); color: #fff; border: none;
+  padding: 5px 10px; border-radius: var(--radius-sm);
+  font-size: 11px; font-weight: 700; cursor: pointer;
+  align-self: flex-start;
+}
+.sync-now-btn:hover { filter: brightness(1.08); }
+
+.sync-chip {
+  padding: 4px 10px; background: var(--but-lt);
+  border: 1px solid rgba(212,168,67,0.4); color: #9A7018;
+  border-radius: 20px; font-size: 11px; font-weight: 600; cursor: pointer;
+}
+
+.offline-pill {
+  display: inline-block; padding: 1px 7px;
+  background: var(--but-lt); color: #9A7018;
+  border-radius: 20px; font-size: 10px; font-weight: 600;
+  margin-left: 4px;
+}
+
+/* ── Install PWA banner ── */
+.install-banner {
+  position: fixed; bottom: calc(var(--nav-h) + 12px); left: 16px; right: 16px;
+  background: var(--bg-2); border: 1px solid var(--border-2);
+  border-radius: var(--radius); padding: 14px 16px;
+  display: flex; align-items: center; gap: 12px;
+  box-shadow: 0 4px 20px rgba(0,0,0,0.12); z-index: 150;
+  animation: slideUp 0.3s ease;
+}
+.install-banner-text { flex: 1; font-size: 13px; color: var(--text); }
+.install-banner-text strong { display: block; margin-bottom: 2px; }
+.install-banner-text span { font-size: 12px; color: var(--text-2); }
+.install-banner-btn {
+  padding: 8px 16px; background: var(--sky); color: #fff;
+  border: none; border-radius: var(--radius-sm);
+  font-size: 13px; font-weight: 700; cursor: pointer; white-space: nowrap;
+}
+.install-banner-close {
+  background: none; border: none; color: var(--text-3);
+  font-size: 18px; cursor: pointer; padding: 2px 4px; line-height: 1;
+}
+@media (min-width: 769px) {
+  .install-banner { bottom: 24px; left: auto; right: 24px; max-width: 360px; }
+}
