@@ -229,6 +229,46 @@ async function deleteSession(id) {
   refreshView();
 }
 
+function openEditMealModal(sessionId, currentMeal) {
+  const meals = ['breakfast', 'lunch', 'dinner', 'other'];
+  openModal(`
+    <h3>Edit Meal Tag</h3>
+    <p style="font-size:13px;color:var(--text-2);margin-bottom:16px;">Update the meal for this session.</p>
+    <div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:16px;">
+      ${meals.map(m => `
+        <div class="meal-tag ${currentMeal===m?'active':''}" id="edit-meal-${m}"
+          onclick="app.selectEditMeal('${m}')" style="font-size:14px;padding:8px 16px;">
+          ${m.charAt(0).toUpperCase()+m.slice(1)}
+        </div>`).join('')}
+      <div class="meal-tag ${!currentMeal?'active':''}" id="edit-meal-none"
+        onclick="app.selectEditMeal('')" style="font-size:14px;padding:8px 16px;">
+        None
+      </div>
+    </div>
+    <div class="modal-row">
+      <button class="modal-btn-primary" onclick="app.saveEditMeal('${sessionId}')">Save</button>
+      <button class="modal-btn-cancel" onclick="app.closeModal()">Cancel</button>
+    </div>`);
+  // store selection in a temp var
+  window._editMealSelected = currentMeal || '';
+}
+
+window.app_selectEditMeal = function(meal) {
+  window._editMealSelected = meal;
+  document.querySelectorAll('[id^="edit-meal-"]').forEach(el => el.classList.remove('active'));
+  const targetId = meal ? `edit-meal-${meal}` : 'edit-meal-none';
+  document.getElementById(targetId)?.classList.add('active');
+};
+
+async function saveEditMeal(sessionId) {
+  const meal = window._editMealSelected || null;
+  const { error } = await db.from('sessions').update({ meal_tag: meal }).eq('id', sessionId);
+  if (error) { console.error(error); return; }
+  await loadAll();
+  closeModal();
+  refreshView();
+}
+
 // ── Stopwatch ──
 function startTimer() {
   if(state.running) return;
@@ -293,14 +333,25 @@ async function stopTimer() {
   }
 }
 
-function resetTimer() {
-  if(state.running||!state.canReset) return;
-  const saved=state.lastElapsed;
-  state.elapsed=saved; updateSWDisplay();
-  setTimeout(()=>{
-    state.elapsed=0; state.lastElapsed=0; state.canReset=false;
-    updateSWDisplay(); renderSWButtons();
-  },700);
+function cancelTimer() {
+  if(!state.running) return;
+  // Cancel without saving — confirm first
+  openModal(`
+    <h3>Cancel Session?</h3>
+    <p style="font-size:13px;color:var(--text-2);margin-bottom:16px;">This will discard the current session without saving it.</p>
+    <div class="modal-row">
+      <button class="modal-btn-primary" style="background:var(--peach)" onclick="app.confirmCancel()">Yes, Discard</button>
+      <button class="modal-btn-cancel" onclick="app.closeModal()">Keep Running</button>
+    </div>`);
+}
+function confirmCancel() {
+  clearInterval(state.ticker);
+  state.running=false; state.elapsed=0; state.startedAt=null;
+  state.canReset=false; state.activeMealTag=null;
+  persistTimer(); closeModal();
+  updateSWDisplay(); renderSWButtons();
+  // Clear meal tags UI
+  document.querySelectorAll('.meal-tag').forEach(el=>el.classList.remove('active'));
 }
 
 // ── Display ──
@@ -343,11 +394,12 @@ function renderStats() {
 
 function renderSWButtons() {
   const btn=document.getElementById('sw-start-btn');
-  const rst=document.getElementById('sw-reset-btn');
+  const rst=document.getElementById('sw-cancel-btn');
   if(!btn) return;
   if(state.running){btn.textContent='⏹ Stop & Log';btn.className='sw-btn sw-btn-stop';btn.onclick=stopTimer;}
   else{btn.textContent='▶ Start';btn.className='sw-btn sw-btn-start';btn.onclick=startTimer;}
-  if(rst) rst.disabled=state.running||!state.canReset;
+  // Cancel button: only visible while running
+  if(rst) rst.style.display=state.running?'inline-block':'none';
 }
 
 // ── Tray helpers ──
@@ -637,7 +689,7 @@ function dashboardHTML(){
           <button class="${state.running?'sw-btn sw-btn-stop':'sw-btn sw-btn-start'}" id="sw-start-btn" onclick="${state.running?'app.stop()':'app.start()'}">
             ${state.running?'⏹ Stop & Log':'▶ Start'}
           </button>
-          <button class="sw-btn sw-btn-reset" id="sw-reset-btn" onclick="app.reset()" ${state.running||!state.canReset?'disabled':''}>Reset</button>
+          <button class="sw-btn sw-btn-reset" id="sw-cancel-btn" onclick="app.cancelTimer()" style="display:${state.running?'inline-block':'none'}">✕ Cancel</button>
           <button class="sw-btn sw-btn-quick" onclick="app.openQuickAdd()">+ Past Session</button>
         </div>
       </div>
@@ -705,7 +757,9 @@ function recentSessionsHTML(){
         ${s._offline?'<span class="offline-pill">pending</span>':''}
       </div>
       <div style="display:flex;gap:7px;align-items:center;">
-        ${s.meal_tag?`<span class="meal-pill">${s.meal_tag}</span>`:''}
+        ${s.meal_tag
+          ?`<button class="meal-pill meal-pill-btn" onclick="app.openEditMeal('${s.id}','${s.meal_tag}')">${s.meal_tag} ✎</button>`
+          :(!s._offline?`<button class="meal-pill-empty" onclick="app.openEditMeal('${s.id}','')">+ meal</button>`:'')}
         <span class="tray-pill">T${s.tray_number}</span>
         <span style="font-family:'DM Mono',monospace;font-size:13px;font-weight:600;color:${statusColor(s.duration_seconds)}">${fmtDur(s.duration_seconds)}</span>
         ${!s._offline?`<button class="delete-btn" onclick="app.askDelete('${s.id}','${s.date_est}')">✕</button>`:'<span style="font-size:11px;color:var(--butter)">⟳</span>'}
@@ -726,7 +780,9 @@ function renderLog(){
     <td class="mono">${s.date_est||'—'}</td><td>${s.time_est||'—'}</td>
     <td class="mono" style="color:${statusColor(s.duration_seconds)}">${fmtDur(s.duration_seconds)}</td>
     <td><span class="tray-pill">T${s.tray_number}</span></td>
-    <td>${s.meal_tag?`<span class="meal-pill">${s.meal_tag}</span>`:''}</td>
+    <td>${s._offline?'':(s.meal_tag
+      ?`<button class="meal-pill meal-pill-btn" onclick="app.openEditMeal('${s.id}','${s.meal_tag}')">${s.meal_tag} ✎</button>`
+      :`<button class="meal-pill-empty" onclick="app.openEditMeal('${s.id}','')">+ meal</button>`)}</td>
     <td>${s._offline?'<span class="offline-pill">pending</span>':`<button class="delete-btn" onclick="app.askDelete('${s.id}','${s.date_est}')">✕</button>`}</td>
   </tr>`).join('');
 
@@ -734,7 +790,13 @@ function renderLog(){
     <div class="log-card-left"><div class="log-card-date">${s.date_est||'—'} ${s._offline?'<span class="offline-pill">pending</span>':''}</div><div class="log-card-time">${s.time_est||''}${s.meal_tag?' · '+s.meal_tag:''}</div></div>
     <div class="log-card-right">
       <div class="log-card-dur" style="color:${statusColor(s.duration_seconds)}">${fmtDur(s.duration_seconds)}</div>
-      <div style="display:flex;gap:6px;align-items:center;"><span class="tray-pill">T${s.tray_number}</span>${!s._offline?`<button class="delete-btn" onclick="app.askDelete('${s.id}','${s.date_est}')">✕</button>`:'<span style="color:var(--butter)">⟳</span>'}</div>
+      <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;justify-content:flex-end;">
+        ${s._offline?'':(s.meal_tag
+          ?`<button class="meal-pill meal-pill-btn" onclick="app.openEditMeal('${s.id}','${s.meal_tag}')">${s.meal_tag} ✎</button>`
+          :`<button class="meal-pill-empty" onclick="app.openEditMeal('${s.id}','')">+ meal</button>`)}
+        <span class="tray-pill">T${s.tray_number}</span>
+        ${!s._offline?`<button class="delete-btn" onclick="app.askDelete('${s.id}','${s.date_est}')">✕</button>`:'<span style="color:var(--butter)">⟳</span>'}
+      </div>
     </div></div>`).join('');
 
   document.querySelector('.main').innerHTML=`
@@ -945,7 +1007,7 @@ function render(){
 
 // ── Public API ──
 window.app={
-  start:startTimer, stop:stopTimer, reset:resetTimer,
+  start:startTimer, stop:stopTimer, cancelTimer, confirmCancel,
   navigate(v){state.view=v;render();},
   filterLog(){renderLog();},
   calPrev(){state.calMonth--;if(state.calMonth<0){state.calMonth=11;state.calYear--;}renderCalendar();},
@@ -960,6 +1022,9 @@ window.app={
   confirmDelete(){if(state.pendingDelete)deleteSession(state.pendingDelete);},
   hideToast,
   syncNow(){syncOfflineQueue();},
+  openEditMeal: openEditMealModal,
+  selectEditMeal(meal){ window.app_selectEditMeal(meal); },
+  saveEditMeal,
   setMealTag(tag){
     state.activeMealTag=state.activeMealTag===tag?null:tag;
     document.querySelectorAll('.meal-tag').forEach(el=>{
