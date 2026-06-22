@@ -486,12 +486,96 @@ function openModal(html){closeModal();const o=document.createElement('div');o.cl
 function closeModal(){document.getElementById('app-modal')?.remove();}
 
 // ── Tray drum ──
-function drumUp(id){state.draftTray=Math.min(TOTAL_TRAYS,state.draftTray+1);const el=document.getElementById(`${id}-val`);if(el){el.textContent=state.draftTray;el.style.transform='translateY(-3px)';setTimeout(()=>el.style.transform='',100);}}
-function drumDown(id){state.draftTray=Math.max(1,state.draftTray-1);const el=document.getElementById(`${id}-val`);if(el){el.textContent=state.draftTray;el.style.transform='translateY(3px)';setTimeout(()=>el.style.transform='',100);}}
-function trayDrumHTML(id){return `<div class="tray-drum" id="${id}"><button class="tray-drum-btn" onclick="app.drumDown('${id}')">−</button><div class="tray-drum-val" id="${id}-val">${state.draftTray}</div><button class="tray-drum-btn" onclick="app.drumUp('${id}')">+</button></div>`;}
-async function saveTrayFromDrum(drumId){const v=state.draftTray;await saveTray(v);closeModal();document.querySelectorAll('.sw-tray-lbl').forEach(el=>el.textContent=`#${v}`);document.querySelectorAll('.mobile-tray-btn').forEach(el=>el.innerHTML=`Tray #${v}`);}
+// ── Scroll Wheel Tray Picker ──
+const ITEM_H = 40; // px per item — must match CSS
 
-function openTrayModal(){state.draftTray=state.currentTray;openModal(`<h3>Current Tray</h3>${trayDrumHTML('modal-drum')}<div class="modal-row"><button class="modal-btn-primary" onclick="app.saveTrayFromDrum('modal-drum')">Save</button><button class="modal-btn-cancel" onclick="app.closeModal()">Cancel</button></div>`);}
+function trayDrumHTML(id) {
+  // Render all 36 trays; selected one is in the center
+  const items = Array.from({length:TOTAL_TRAYS},(_,i)=>i+1);
+  const selected = state.draftTray;
+  return `
+    <div class="tray-drum" id="${id}" data-selected="${selected}">
+      <div class="tray-drum-scroll" id="${id}-scroll">
+        ${items.map(n=>`<div class="tray-drum-item ${n===selected?'selected':Math.abs(n-selected)===1?'near':''}" data-val="${n}">${n}</div>`).join('')}
+      </div>
+    </div>`;
+}
+
+function initDrum(id) {
+  const drum = document.getElementById(id);
+  if (!drum) return;
+  const scroll = document.getElementById(`${id}-scroll`);
+  const drumH = drum.offsetHeight; // e.g. 160
+  const centerOffset = (drumH / 2) - (ITEM_H / 2); // offset to center selected item
+
+  function setPosition(val, animate=true) {
+    const idx = val - 1; // 0-based
+    const y = centerOffset - (idx * ITEM_H);
+    scroll.style.transition = animate ? 'transform 0.2s ease' : 'none';
+    scroll.style.transform = `translateY(${y}px)`;
+    // Update classes
+    scroll.querySelectorAll('.tray-drum-item').forEach(el => {
+      const v = parseInt(el.dataset.val);
+      el.className = 'tray-drum-item' + (v===val?' selected':Math.abs(v-val)===1?' near':'');
+    });
+    state.draftTray = val;
+    drum.dataset.selected = val;
+  }
+
+  // Init position without animation
+  setPosition(state.draftTray, false);
+
+  // Touch / mouse drag
+  let startY = null, startVal = null;
+
+  function onStart(y) { startY = y; startVal = state.draftTray; }
+  function onMove(y) {
+    if (startY === null) return;
+    const delta = startY - y;
+    const steps = Math.round(delta / ITEM_H);
+    const newVal = Math.max(1, Math.min(TOTAL_TRAYS, startVal + steps));
+    if (newVal !== state.draftTray) setPosition(newVal);
+  }
+  function onEnd() { startY = null; startVal = null; }
+
+  drum.addEventListener('touchstart', e => onStart(e.touches[0].clientY), {passive:true});
+  drum.addEventListener('touchmove',  e => { e.preventDefault(); onMove(e.touches[0].clientY); }, {passive:false});
+  drum.addEventListener('touchend',   onEnd);
+  drum.addEventListener('mousedown',  e => { onStart(e.clientY); });
+  drum.addEventListener('mousemove',  e => { if(startY!==null) onMove(e.clientY); });
+  drum.addEventListener('mouseup',    onEnd);
+  drum.addEventListener('mouseleave', onEnd);
+
+  // Scroll wheel support
+  drum.addEventListener('wheel', e => {
+    e.preventDefault();
+    const dir = e.deltaY > 0 ? 1 : -1;
+    setPosition(Math.max(1, Math.min(TOTAL_TRAYS, state.draftTray + dir)));
+  }, {passive:false});
+}
+
+function drumUp(id){ /* kept for compat */ }
+function drumDown(id){ /* kept for compat */ }
+
+async function saveTrayFromDrum(drumId){
+  const v=state.draftTray;
+  await saveTray(v); closeModal();
+  document.querySelectorAll('.sw-tray-lbl').forEach(el=>el.textContent=`#${v}`);
+  document.querySelectorAll('.mobile-tray-btn').forEach(el=>el.innerHTML=`Tray #${v}`);
+}
+
+function openTrayModal(){
+  state.draftTray=state.currentTray;
+  openModal(`
+    <h3 style="margin-bottom:8px">Current Tray</h3>
+    <p style="font-size:12px;color:var(--text-3);margin-bottom:14px;text-align:center;">Scroll or drag to select</p>
+    ${trayDrumHTML('modal-drum')}
+    <div class="modal-row">
+      <button class="modal-btn-primary" onclick="app.saveTrayFromDrum('modal-drum')">Save</button>
+      <button class="modal-btn-cancel" onclick="app.closeModal()">Cancel</button>
+    </div>`);
+  requestAnimationFrame(()=>initDrum('modal-drum'));
+}
 
 function openSetupModal(){
   openModal(`
@@ -948,9 +1032,10 @@ function renderCalendar(){
     const ds=`${year}-${String(month+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
     const sec=byDate[ds]||0; const dc=sec?durClass(sec):'';
     const note=state.notes[ds]||''; const tray=trayByDate[ds];
-    cells+=`<div class="cal-cell ${ds===todayStr?'today':''} ${note?'has-note':''}" onclick="app.openNote('${ds}')">
+    // dc class goes on the cell itself for full background color
+    cells+=`<div class="cal-cell ${ds===todayStr?'today':''} ${dc} ${note?'has-note':''}" onclick="app.openNote('${ds}')">
       <div class="cal-date">${d}</div>
-      ${sec?`<div class="cal-dur ${dc}">${fmtDur(sec)}</div>`:''}
+      ${sec?`<div class="cal-dur">${fmtDur(sec)}</div>`:''}
       ${note?`<div class="cal-note-preview">${note}</div>`:''}
       ${tray?`<div class="cal-tray">T${tray}</div>`:''}
     </div>`;
@@ -1003,6 +1088,8 @@ function render(){
   else if(state.view==='calendar') renderCalendar();
   state.syncPending=getOfflineQueue().length;
   updateSyncBadge();
+  // Init sidebar drum
+  requestAnimationFrame(()=>initDrum('sidebar-drum'));
 }
 
 // ── Public API ──
