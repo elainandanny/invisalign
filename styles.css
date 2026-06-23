@@ -292,23 +292,37 @@ textarea.form-input { resize:vertical; min-height:80px; }
 .toast-confirm { background:var(--peach); color:#fff; border:none; padding:6px 12px; border-radius:var(--radius-sm); cursor:pointer; font-size:12px; font-weight:700; }
 .toast-cancel  { background:none; border:none; color:var(--text-3); cursor:pointer; font-size:12px; padding:6px 8px; }
 
-/* ── Log session rows ── */
+/* ── Log session rows — single line, 4-col grid ── */
 .log-session-row {
   display:grid;
-  grid-template-columns: 1fr auto auto;
+  grid-template-columns: minmax(0,1.4fr) minmax(0,0.9fr) auto auto;
   align-items:center;
-  gap:10px;
-  padding:12px 20px;
+  gap:8px;
+  padding:11px 20px;
   border-bottom:1px solid var(--border);
+  min-height:48px;
 }
 .log-session-row:last-child { border-bottom:none; }
 .log-session-offline { opacity:0.7; }
-.log-col-date { display:flex; flex-direction:column; gap:2px; }
-.log-date { font-size:13px; color:var(--text); font-weight:600; }
-.log-time { font-size:11px; color:var(--text-3); }
-.log-col-tags { display:flex; flex-direction:column; gap:5px; align-items:flex-start; }
-.log-col-dur { display:flex; align-items:center; gap:8px; }
+.log-col-date {
+  display:flex; flex-direction:column; gap:1px;
+  min-width:0; overflow:hidden;
+}
+.log-date { font-size:13px; color:var(--text); font-weight:600; white-space:nowrap; }
+.log-time { font-size:11px; color:var(--text-3); white-space:nowrap; }
+.log-col-tags { display:flex; align-items:center; gap:5px; flex-wrap:nowrap; min-width:0; }
+.log-col-dur { display:flex; align-items:center; gap:6px; justify-content:flex-end; }
 .log-duration { font-family:'DM Mono',monospace; font-size:14px; font-weight:700; white-space:nowrap; }
+
+@media (max-width:768px) {
+  .log-session-row {
+    grid-template-columns: minmax(0,1fr) auto auto auto;
+    gap:6px;
+    padding:10px 14px;
+  }
+  .log-date { font-size:12px; }
+  .log-duration { font-size:13px; }
+}
 
 /* ── Tray schedule overview ── */
 .tray-schedule-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(72px,1fr)); gap:8px; margin-top:4px; }

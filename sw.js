@@ -1,5 +1,5 @@
 // ── Invisalign Tracker — Service Worker ──
-const CACHE_NAME = 'invisalign-v1';
+const CACHE_NAME = 'invisalign-v2';
 const STATIC_ASSETS = [
   './',
   './index.html',

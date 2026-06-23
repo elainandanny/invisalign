@@ -13,6 +13,7 @@ function defaultDaysForTray(t) { return t <= 3 ? 14 : 7; }
 // ── State ──
 const state = {
   view: 'dashboard',
+  logFilter: '',
   running: false,
   startedAt: null,
   elapsed: 0,
@@ -857,47 +858,44 @@ function recentSessionsHTML(){
 }
 
 // ── Log ──
+function logSessionRowHTML(s){
+  return `<div class="log-session-row ${s._offline?'log-session-offline':''}">
+    <div class="log-col-date">
+      <span class="log-date">${s.date_est||'—'}</span>
+      <span class="log-time">${s.time_est||'—'}</span>
+    </div>
+    <div class="log-col-tags">
+      ${s._offline?'<span class="offline-pill">pending</span>':(s.meal_tag
+        ?`<button class="meal-pill meal-pill-btn" onclick="app.openEditMeal('${s.id}','${s.meal_tag}')">${s.meal_tag} ✎</button>`
+        :`<button class="meal-pill-empty" onclick="app.openEditMeal('${s.id}','')">+ meal</button>`)}
+      <span class="tray-pill">T${s.tray_number}</span>
+    </div>
+    <div class="log-col-dur">
+      <span class="log-duration" style="color:${statusColor(s.duration_seconds)}">${fmtDur(s.duration_seconds)}</span>
+      ${!s._offline?`<button class="delete-btn" onclick="app.askDelete('${s.id}','${s.date_est}')">✕</button>`:'<span style="color:var(--butter);font-size:14px">⟳</span>'}
+    </div>
+  </div>`;
+}
+
 function renderLog(){
-  const fv=(document.getElementById('log-filter')?.value||'').toLowerCase();
+  const fv=state.logFilter;
   const allSessions=[...state.sessions,...getOfflineQueue().map(s=>({...s,_offline:true}))];
   const seen=new Set();
   let sessions=allSessions.filter(s=>{if(seen.has(s.started_at))return false;seen.add(s.started_at);return true;});
   sessions.sort((a,b)=>new Date(b.started_at)-new Date(a.started_at));
   if(fv) sessions=sessions.filter(s=>s.date_est?.includes(fv)||String(s.tray_number).includes(fv)||(s.meal_tag||'').includes(fv));
 
-  // Session cards — same style as recent sessions, 3-column layout
-  const sessionCards = sessions.map(s=>`
-    <div class="log-session-row ${s._offline?'log-session-offline':''}">
-      <!-- Left: date + time -->
-      <div class="log-col-date">
-        <div class="log-date">${s.date_est||'—'}</div>
-        <div class="log-time">${s.time_est||'—'}</div>
-      </div>
-      <!-- Middle: tag + tray -->
-      <div class="log-col-tags">
-        ${s._offline?'<span class="offline-pill">pending</span>':(s.meal_tag
-          ?`<button class="meal-pill meal-pill-btn" onclick="app.openEditMeal('${s.id}','${s.meal_tag}')">${s.meal_tag} ✎</button>`
-          :`<button class="meal-pill-empty" onclick="app.openEditMeal('${s.id}','')">+ meal</button>`)}
-        <span class="tray-pill">T${s.tray_number}</span>
-      </div>
-      <!-- Right: duration + delete -->
-      <div class="log-col-dur">
-        <span class="log-duration" style="color:${statusColor(s.duration_seconds)}">${fmtDur(s.duration_seconds)}</span>
-        ${!s._offline?`<button class="delete-btn" onclick="app.askDelete('${s.id}','${s.date_est}')">✕</button>`:'<span style="color:var(--butter);font-size:14px">⟳</span>'}
-      </div>
-    </div>`).join('');
-
   document.querySelector('.main').innerHTML=`
     <div class="page-title">Session Log</div>
     ${state.syncPending>0?`<div class="alert-bar warning">⟳ ${state.syncPending} session${state.syncPending!==1?'s':''} waiting to sync. <button onclick="app.syncNow()" style="background:none;border:none;color:var(--butter);cursor:pointer;font-weight:700;text-decoration:underline;">Sync now</button></div>`:''}
     <div class="log-filters">
-      <input class="filter-input" placeholder="Filter by date, tray, or meal…" id="log-filter" value="${fv}" oninput="app.filterLog()"/>
-      <span style="font-size:12px;color:var(--text-3)">${sessions.length} sessions</span>
+      <input class="filter-input" placeholder="Filter by date, tray, or meal…" id="log-filter" value="${fv}" oninput="app.setFilter(this.value)"/>
+      <span id="log-count" style="font-size:12px;color:var(--text-3)">${sessions.length} sessions</span>
       <button class="sw-btn sw-btn-quick" style="padding:8px 14px;min-width:0;font-size:12px" onclick="app.openQuickAdd()">+ Past Session</button>
     </div>
-    ${!sessions.length
-      ?`<div class="card"><p class="empty-state">No sessions found.</p></div>`
-      :`<div class="card" style="padding:0 0 8px;">${sessionCards}</div>`}`;
+    <div class="card" style="padding:0 0 8px;" id="log-session-list">
+      ${sessions.length?sessions.map(s=>logSessionRowHTML(s)).join(''):`<p class="empty-state" style="padding:32px">No sessions yet.</p>`}
+    </div>`;
 }
 
 // ── Progress ──
@@ -1038,8 +1036,6 @@ function renderCalendar(){
     cells+=`<div class="cal-cell ${ds===todayStr?'today':''} ${dc} ${note?'has-note':''}" onclick="app.openNote('${ds}')">
       <div class="cal-date">${d}</div>
       ${sec?`<div class="cal-dur">${fmtDur(sec)}</div>`:''}
-      ${note?`<div class="cal-note-preview">${note}</div>`:''}
-      ${tray?`<div class="cal-tray">T${tray}</div>`:''}
     </div>`;
   }
   document.querySelector('.main').innerHTML=`
@@ -1099,6 +1095,19 @@ window.app={
   start:startTimer, stop:stopTimer, cancelTimer, confirmCancel,
   navigate(v){state.view=v;render();},
   filterLog(){renderLog();},
+  setFilter(val){
+    state.logFilter=val.toLowerCase();
+    // Re-render only the session list, not the whole page (preserves input focus)
+    const allSessions=[...state.sessions,...getOfflineQueue().map(s=>({...s,_offline:true}))];
+    const seen=new Set();
+    let sessions=allSessions.filter(s=>{if(seen.has(s.started_at))return false;seen.add(s.started_at);return true;});
+    sessions.sort((a,b)=>new Date(b.started_at)-new Date(a.started_at));
+    if(state.logFilter) sessions=sessions.filter(s=>s.date_est?.includes(state.logFilter)||String(s.tray_number).includes(state.logFilter)||(s.meal_tag||'').includes(state.logFilter));
+    const container=document.getElementById('log-session-list');
+    const countEl=document.getElementById('log-count');
+    if(container) container.innerHTML=sessions.length?sessions.map(s=>logSessionRowHTML(s)).join(''):`<p class="empty-state" style="padding:32px">No sessions found.</p>`;
+    if(countEl) countEl.textContent=`${sessions.length} sessions`;
+  },
   calPrev(){state.calMonth--;if(state.calMonth<0){state.calMonth=11;state.calYear--;}renderCalendar();},
   calNext(){state.calMonth++;if(state.calMonth>11){state.calMonth=0;state.calYear++;}renderCalendar();},
   drumUp, drumDown, saveTrayFromDrum,
