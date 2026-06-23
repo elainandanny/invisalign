@@ -191,14 +191,14 @@ async function loadAll() {
       db.from('sessions').select('*').order('started_at',{ascending:false}),
       db.from('daily_notes').select('*'),
       db.from('tray_schedule').select('*'),
-      db.from('settings').select('value').eq('key','current_tray').single(),
+      db.from('settings').select('value').eq('key','current_tray').maybeSingle(),
     ]);
     if(!sess.error)  state.sessions = sess.data||[];
     if(!notes.error) { state.notes={}; (notes.data||[]).forEach(n=>state.notes[n.date_est]=n.note); }
     if(!sched.error) { state.traySchedule={}; (sched.data||[]).forEach(t=>state.traySchedule[t.tray_number]={start_date:t.start_date,days_to_wear:t.days_to_wear}); }
     if(tray.data)    { state.currentTray=parseInt(tray.data.value)||1; state.draftTray=state.currentTray; }
   // Load total trays setting
-  const totalTraySetting = await db.from('settings').select('value').eq('key','total_trays').single();
+  const totalTraySetting = await db.from('settings').select('value').eq('key','total_trays').maybeSingle();
   if(totalTraySetting.data) TOTAL_TRAYS = parseInt(totalTraySetting.data.value)||36;
   } catch(e) {
     console.warn('loadAll failed (offline?):', e);
@@ -591,6 +591,22 @@ async function saveTrayFromDrum(drumId){
   // Re-render tray progress card in place — no full page reload needed
   const trayCard=document.getElementById('tray-progress-card');
   if(trayCard) trayCard.outerHTML=trayProgressCardHTML();
+}
+
+function overallProgress() {
+  const sched = state.traySchedule;
+  if (!sched[1]) return null;
+  const tray1Start = new Date(sched[1].start_date + 'T12:00:00');
+  let totalDays = 0;
+  for (let t = 1; t <= TOTAL_TRAYS; t++) {
+    totalDays += sched[t] ? sched[t].days_to_wear : defaultDaysForTray(t);
+  }
+  const today   = new Date(isoDateEST() + 'T12:00:00');
+  const elapsed = Math.max(0, Math.round((today - tray1Start) / 86400000));
+  const pct     = Math.min(100, Math.round((elapsed / totalDays) * 100));
+  const endDate = new Date(tray1Start);
+  endDate.setDate(endDate.getDate() + totalDays);
+  return { elapsed, totalDays, pct, endDate: isoDateEST(endDate) };
 }
 
 function trayProgressCardHTML(){
