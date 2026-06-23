@@ -4,7 +4,7 @@ const { createClient } = window.supabase;
 const db = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
 const WARN_SECONDS = MAX_OUT_SECONDS + 30 * 60;
-const TOTAL_TRAYS  = 36;
+let TOTAL_TRAYS  = 36; // overridden from Supabase settings on load
 const QUEUE_KEY    = 'invisalign_offline_queue';
 const TIMER_KEY    = 'sw_startedAt';
 
@@ -14,6 +14,8 @@ function defaultDaysForTray(t) { return t <= 3 ? 14 : 7; }
 const state = {
   view: 'dashboard',
   logFilter: '',
+  darkMode: false,
+  palette: 'default',
   running: false,
   startedAt: null,
   elapsed: 0,
@@ -62,6 +64,23 @@ function statColor(sec) {
 }
 function remColor(rem) {
   if(rem<=0) return 'c-peach'; if(rem<=1800) return 'c-butter'; return 'c-sky';
+}
+
+// ── Palettes ──
+const PALETTES = {
+  default:     { name:'Pastel',         colors:['#6BBF8E','#5BAFD6','#9B8EC4','#D4A843','#D97B6C'] },
+  tiana:       { name:'Tiana',          colors:['#5B9B6B','#4A8FA8','#8B7BAA','#C9973A','#C8694A'] },
+  ariel:       { name:'Ariel',          colors:['#3AADA8','#4A7FC1','#8B6BAA','#D4854A','#C84A5A'] },
+  cinderella:  { name:'Cinderella',     colors:['#6AA8C8','#4878B0','#9888C0','#B8A878','#C87888'] },
+  rapunzel:    { name:'Rapunzel',       colors:['#8BAA5B','#9870C0','#C0905A','#D4B83A','#C05870'] },
+  moana:       { name:'Moana',          colors:['#3A9BA8','#2878A8','#C0784A','#D4A030','#D06040'] },
+  elsa:        { name:'Elsa',           colors:['#70B8D8','#4888C0','#9098D0','#A8C8E0','#C080B0'] },
+  cruise:      { name:'Disney Cruise',  colors:['#B33A3A','#1B3D5C','#1B3D5C','#F2C94C','#B33A3A'] },
+};
+
+function applyTheme() {
+  document.body.setAttribute('data-theme', state.darkMode ? 'dark' : 'light');
+  document.body.setAttribute('data-palette', state.palette === 'default' ? '' : state.palette);
 }
 
 // ── Offline Queue ──
@@ -162,6 +181,10 @@ function restoreTimer() {
 
 // ── Supabase ──
 async function loadAll() {
+  // Restore theme from localStorage first (instant, no flash)
+  state.darkMode = localStorage.getItem('darkMode') === 'true';
+  state.palette  = localStorage.getItem('palette') || 'default';
+  applyTheme();
   if (!state.isOnline) return; // skip if offline, use cached state
   try {
     const [sess,notes,sched,tray] = await Promise.all([
@@ -174,6 +197,9 @@ async function loadAll() {
     if(!notes.error) { state.notes={}; (notes.data||[]).forEach(n=>state.notes[n.date_est]=n.note); }
     if(!sched.error) { state.traySchedule={}; (sched.data||[]).forEach(t=>state.traySchedule[t.tray_number]={start_date:t.start_date,days_to_wear:t.days_to_wear}); }
     if(tray.data)    { state.currentTray=parseInt(tray.data.value)||1; state.draftTray=state.currentTray; }
+  // Load total trays setting
+  const totalTraySetting = await db.from('settings').select('value').eq('key','total_trays').single();
+  if(totalTraySetting.data) TOTAL_TRAYS = parseInt(totalTraySetting.data.value)||36;
   } catch(e) {
     console.warn('loadAll failed (offline?):', e);
   }
@@ -568,6 +594,82 @@ async function saveTrayFromDrum(drumId){
 }
 
 function trayProgressCardHTML(){
+  const overall = overallProgress();
+  const trayInfo = currentTrayInfo();
+  const hasSchedule = Object.keys(state.traySchedule).length > 0;
+  const C28 = 2 * Math.PI * 28;
+
+  if (trayInfo && overall) {
+    return `<div class="card" id="tray-progress-card">
+      <div class="section-title">Tray Progress</div>
+      <div class="dual-rings">
+        <!-- Current tray ring -->
+        <div class="ring-block">
+          <div class="ring-block-label">Tray #${state.currentTray}</div>
+          <div style="position:relative;display:inline-flex;align-items:center;justify-content:center;">
+            <svg width="80" height="80" viewBox="0 0 80 80" style="transform:rotate(-90deg)">
+              <circle cx="40" cy="40" r="28" fill="none" stroke="var(--bg-3)" stroke-width="7"/>
+              <circle cx="40" cy="40" r="28" fill="none" stroke="var(--lavender)" stroke-width="7" stroke-linecap="round"
+                stroke-dasharray="${C28}" stroke-dashoffset="${C28*(1-trayInfo.pct/100)}"/>
+            </svg>
+            <div class="tray-pct">${trayInfo.pct}%</div>
+          </div>
+          <div class="ring-block-sub">Day ${trayInfo.daysOn} of ${trayInfo.daysToWear}</div>
+          <div class="ring-block-sub" style="color:${trayInfo.daysLeft<=2?'var(--peach)':trayInfo.daysLeft<=4?'var(--butter)':'var(--sage)'};font-weight:600">${trayInfo.daysLeft}d left</div>
+          <div class="ring-block-sub">Change ${new Date(trayInfo.endDate+'T12:00:00').toLocaleDateString('en-US',{month:'short',day:'numeric'})}</div>
+          <button class="tray-edit-btn" onclick="app.openTrayScheduleModal(${state.currentTray})">Edit</button>
+        </div>
+        <!-- Overall treatment ring -->
+        <div class="ring-block">
+          <div class="ring-block-label">Overall</div>
+          <div style="position:relative;display:inline-flex;align-items:center;justify-content:center;">
+            <svg width="80" height="80" viewBox="0 0 80 80" style="transform:rotate(-90deg)">
+              <circle cx="40" cy="40" r="28" fill="none" stroke="var(--bg-3)" stroke-width="7"/>
+              <circle cx="40" cy="40" r="28" fill="none" stroke="var(--sage)" stroke-width="7" stroke-linecap="round"
+                stroke-dasharray="${C28}" stroke-dashoffset="${C28*(1-overall.pct/100)}"/>
+            </svg>
+            <div class="tray-pct" style="color:var(--sage)">${overall.pct}%</div>
+          </div>
+          <div class="ring-block-sub">Day ${overall.elapsed} of ${overall.totalDays}</div>
+          <div class="ring-block-sub" style="color:var(--sage);font-weight:600">T${state.currentTray} of ${TOTAL_TRAYS}</div>
+          <div class="ring-block-sub">Done ~${new Date(overall.endDate+'T12:00:00').toLocaleDateString('en-US',{month:'short',year:'numeric'})}</div>
+        </div>
+      </div>
+    </div>`;
+  }
+
+  // Fallback: tray info available but no overall (no tray 1 start date)
+  if (trayInfo) {
+    return `<div class="card" id="tray-progress-card">
+      <div class="section-title">Tray Progress</div>
+      <div class="tray-card">
+        <div class="tray-ring">
+          <svg width="72" height="72" viewBox="0 0 72 72">
+            <circle cx="36" cy="36" r="28" fill="none" stroke="var(--bg-3)" stroke-width="7"/>
+            <circle cx="36" cy="36" r="28" fill="none" stroke="var(--lavender)" stroke-width="7" stroke-linecap="round"
+              stroke-dasharray="${2*Math.PI*28}" stroke-dashoffset="${2*Math.PI*28*(1-trayInfo.pct/100)}"
+              transform="rotate(-90 36 36)"/>
+          </svg>
+          <div class="tray-pct">${trayInfo.pct}%</div>
+        </div>
+        <div class="tray-info">
+          <h3>Tray #${state.currentTray} of ${TOTAL_TRAYS}</h3>
+          <p>Day <strong>${trayInfo.daysOn}</strong> of ${trayInfo.daysToWear} &nbsp;·&nbsp; <strong style="color:${trayInfo.daysLeft<=2?'var(--peach)':trayInfo.daysLeft<=4?'var(--butter)':'var(--sage)'}">${trayInfo.daysLeft}d left</strong></p>
+          <p style="font-size:12px;color:var(--text-3);margin-top:2px;">Change on ${new Date(trayInfo.endDate+'T12:00:00').toLocaleDateString('en-US',{month:'short',day:'numeric'})}</p>
+          <button class="tray-edit-btn" onclick="app.openTrayScheduleModal(${state.currentTray})">Edit schedule</button>
+        </div>
+      </div>
+    </div>`;
+  }
+
+  // No schedule at all
+  return `<div class="card" id="tray-progress-card">
+    <div class="section-title">Tray Schedule</div>
+    <p style="font-size:13px;color:var(--text-2);margin-bottom:12px;">${hasSchedule?`Tray #${state.currentTray} not configured.`:'Set up your schedule for change countdowns.'}</p>
+    <button class="sw-btn sw-btn-quick" style="width:100%;padding:8px;" onclick="app.openTrayScheduleModal(${state.currentTray})">${hasSchedule?`Configure Tray #${state.currentTray}`:'Configure This Tray'}</button>
+    ${!hasSchedule?`<button class="sw-btn sw-btn-quick" style="width:100%;padding:8px;margin-top:8px;" onclick="app.openSetup()">Auto-generate All ${TOTAL_TRAYS} Trays</button>`:''}
+  </div>`;
+}
   const trayInfo=currentTrayInfo();
   const hasSchedule=Object.keys(state.traySchedule).length>0;
   if(trayInfo){
@@ -736,6 +838,7 @@ const NAV=[
   {id:'progress', label:'Progress', icon:'◎'},
   {id:'graphs',   label:'Graphs',   icon:'⌇'},
   {id:'calendar', label:'Calendar', icon:'▦'},
+  {id:'settings', label:'Settings', icon:'⚙'},
 ];
 
 function sidebarHTML(){return `<aside class="sidebar">
@@ -758,9 +861,10 @@ function mobileHeaderHTML(){return `<header class="mobile-header">
     <span class="mobile-header-title">Invisalign</span>
     <div id="offline-dot" class="offline-dot" style="display:${state.isOnline?'none':'block'}" title="Offline"></div>
   </div>
-  <div style="display:flex;align-items:center;gap:8px;">
+  <div class="mobile-header-right">
     ${state.syncPending>0?`<button class="sync-chip" onclick="app.syncNow()">⟳ ${state.syncPending} pending</button>`:''}
     <button class="mobile-tray-btn" onclick="app.openTrayModal()">Tray #${state.currentTray}</button>
+    <button class="gear-btn" onclick="app.navigate('settings')" title="Settings">⚙</button>
   </div>
 </header>`;}
 
@@ -1138,6 +1242,7 @@ function render(){
   else if(state.view==='progress') renderProgress();
   else if(state.view==='graphs')   renderGraphs();
   else if(state.view==='calendar') renderCalendar();
+  else if(state.view==='settings') renderSettings();
   state.syncPending=getOfflineQueue().length;
   updateSyncBadge();
   // Init sidebar drum
@@ -1165,6 +1270,35 @@ window.app={
   confirmDelete(){if(state.pendingDelete)deleteSession(state.pendingDelete);},
   hideToast,
   syncNow(){syncOfflineQueue();},
+  toggleDark(on){
+    state.darkMode = on;
+    localStorage.setItem('darkMode', on);
+    applyTheme();
+  },
+  setPalette(key){
+    state.palette = key;
+    localStorage.setItem('palette', key);
+    applyTheme();
+    // Re-render palette cards to show active state
+    document.querySelectorAll('.palette-card').forEach(el=>{
+      el.classList.toggle('active', el.getAttribute('onclick').includes(`'${key}'`));
+    });
+    const nameEl = document.querySelector(`.palette-card.active .palette-name`);
+    if(nameEl) nameEl.style.color='var(--sky)';
+  },
+  async saveTotalTrays(){
+    const v = parseInt(document.getElementById('setting-total-trays')?.value)||36;
+    TOTAL_TRAYS = v;
+    await db.from('settings').upsert({key:'total_trays', value:String(v)});
+    showToastMessage(`✓ Total trays updated to ${v}`);
+    renderSettings();
+  },
+  saveWearLimit(){
+    const v = parseFloat(document.getElementById('setting-wear-limit')?.value)||2;
+    // Update the module-level constant via reassignment isn't possible, store and reload
+    localStorage.setItem('wearLimit', v);
+    showToastMessage(`✓ Wear limit set to ${v}h — takes effect on next load`);
+  },
   openEditMeal: openEditMealModal,
   selectEditMeal(meal){ window.app_selectEditMeal(meal); },
   saveEditMeal,
