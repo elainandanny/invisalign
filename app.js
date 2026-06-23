@@ -913,16 +913,13 @@ function applyLogFilter() {
 
 function logSessionRowHTML(s){
   return `<div class="log-session-row ${s._offline?'log-session-offline':''}">
-    <div class="log-col-date">
-      <span class="log-date">${s.date_est||'—'}</span>
-      <span class="log-time">${s.time_est||'—'}</span>
-    </div>
-    ${s._offline?'<span class="offline-pill" style="font-size:10px;flex-shrink:0">sync</span>':(s.meal_tag
+    <span class="log-datetime">${s.date_est||'—'} <span class="log-time">${s.time_est||'—'}</span></span>
+    ${s._offline?'<span class="offline-pill">sync</span>':(s.meal_tag
       ?`<button class="meal-pill meal-pill-btn" onclick="app.openEditMeal('${s.id}','${s.meal_tag}')">${s.meal_tag} ✎</button>`
       :`<button class="meal-pill-empty" onclick="app.openEditMeal('${s.id}','')">+ meal</button>`)}
-    <span class="tray-pill" style="flex-shrink:0">T${s.tray_number}</span>
-    <span class="log-duration" style="color:${statusColor(s.duration_seconds)};flex-shrink:0">${fmtDur(s.duration_seconds)}</span>
-    ${!s._offline?`<button class="delete-btn" style="flex-shrink:0" onclick="app.askDelete('${s.id}','${s.date_est}')">✕</button>`:'<span style="color:var(--butter);flex-shrink:0">⟳</span>'}
+    <span class="tray-pill">T${s.tray_number}</span>
+    <span class="log-duration" style="color:${statusColor(s.duration_seconds)}">${fmtDur(s.duration_seconds)}</span>
+    ${!s._offline?`<button class="delete-btn" onclick="app.askDelete('${s.id}','${s.date_est}')">✕</button>`:'<span style="color:var(--butter)">⟳</span>'}
   </div>`;
 }
 
