@@ -1102,16 +1102,16 @@ function renderGraphs(){
   drawCharts();
 }
 function getPaletteColors() {
-  // Read current CSS variable values so charts always match the active palette
-  const s = getComputedStyle(document.body);
-  const get = v => s.getPropertyValue(v).trim();
+  // Use PALETTES definition directly — reliable, no CSS parsing needed
+  // colors array order: [sky, sage, lavender, butter, peach]
+  const p = PALETTES[state.palette] || PALETTES['default'];
   return {
-    sage:     get('--sage')     || '#6BBF8E',
-    sky:      get('--sky')      || '#5BAFD6',
-    lavender: get('--lavender') || '#9B8EC4',
-    butter:   get('--butter')   || '#D4A843',
-    peach:    get('--peach')    || '#D97B6C',
-    rose:     get('--rose')     || '#C4728A',
+    sky:      p.colors[0],
+    sage:     p.colors[1],
+    lavender: p.colors[2],
+    butter:   p.colors[3],
+    peach:    p.colors[4],
+    rose:     p.colors[4], // fallback
   };
 }
 
@@ -1142,12 +1142,16 @@ function drawCharts(){
   const buckets={'<15m':0,'15–30m':0,'30–60m':0,'60–90m':0,'>90m':0};
   allSessions.forEach(s=>{const m=s.duration_seconds/60;if(m<15)buckets['<15m']++;else if(m<30)buckets['15–30m']++;else if(m<60)buckets['30–60m']++;else if(m<90)buckets['60–90m']++;else buckets['>90m']++;});
   if(state.charts.dist)state.charts.dist.destroy();
-  state.charts.dist=new Chart(document.getElementById('chart-dist'),{type:'doughnut',data:{labels:Object.keys(buckets),datasets:[{data:Object.values(buckets),backgroundColor:['rgba(107,191,142,0.8)','rgba(91,175,214,0.75)','rgba(155,142,196,0.75)','rgba(212,168,67,0.75)','rgba(217,123,108,0.8)'],borderWidth:0}]},options:{plugins:{legend:{labels:{color:'#6B6B7A',font:{size:11}}}},responsive:true,maintainAspectRatio:false,cutout:'58%'}});
+  const pc=getPaletteColors();
+  const lc=state.darkMode?'#8892AA':'#6B6B7A';
+  const dc=[hexToRgba(pc.sage,0.85),hexToRgba(pc.sky,0.8),hexToRgba(pc.lavender,0.8),hexToRgba(pc.butter,0.8),hexToRgba(pc.peach,0.85)];
+  state.charts.dist=new Chart(document.getElementById('chart-dist'),{type:'doughnut',data:{labels:Object.keys(buckets),datasets:[{data:Object.values(buckets),backgroundColor:dc,borderWidth:0}]},options:{plugins:{legend:{labels:{color:lc,font:{size:11}}}},responsive:true,maintainAspectRatio:false,cutout:'58%'}});
   const mc={breakfast:0,lunch:0,dinner:0,other:0,none:0};
   allSessions.forEach(s=>{const tag=s.meal_tag&&mc.hasOwnProperty(s.meal_tag)?s.meal_tag:'none';mc[tag]++;});
   const ml=Object.keys(mc).filter(k=>mc[k]>0);
   if(state.charts.meal)state.charts.meal.destroy();
-  state.charts.meal=new Chart(document.getElementById('chart-meal'),{type:'doughnut',data:{labels:ml,datasets:[{data:ml.map(k=>mc[k]),backgroundColor:['rgba(212,168,67,0.8)','rgba(107,191,142,0.8)','rgba(217,123,108,0.8)','rgba(155,142,196,0.75)','rgba(160,160,174,0.5)'],borderWidth:0}]},options:{plugins:{legend:{labels:{color:'#6B6B7A',font:{size:11}}}},responsive:true,maintainAspectRatio:false,cutout:'58%'}});
+  const mc2=[hexToRgba(pc.butter,0.85),hexToRgba(pc.sage,0.85),hexToRgba(pc.peach,0.85),hexToRgba(pc.lavender,0.8),hexToRgba(pc.sky,0.75)];
+  state.charts.meal=new Chart(document.getElementById('chart-meal'),{type:'doughnut',data:{labels:ml,datasets:[{data:ml.map(k=>mc[k]),backgroundColor:mc2,borderWidth:0}]},options:{plugins:{legend:{labels:{color:lc,font:{size:11}}}},responsive:true,maintainAspectRatio:false,cutout:'58%'}});
 }
 
 // ── Calendar ──
