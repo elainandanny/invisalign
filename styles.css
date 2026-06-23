@@ -178,7 +178,9 @@ body {
 
 /* ── Modals ── */
 .modal-overlay { position:fixed; inset:0; background:rgba(0,0,0,0.35); z-index:200; display:flex; align-items:flex-end; justify-content:center; }
-.modal-sheet { background:var(--bg-2); border:1px solid var(--border); border-radius:var(--radius) var(--radius) 0 0; padding:28px 24px; width:100%; max-width:480px; max-height:90vh; overflow-y:auto; box-shadow:0 -8px 32px rgba(0,0,0,0.12); }
+.modal-sheet { background:var(--bg-2); border:1px solid var(--border); border-radius:var(--radius) var(--radius) 0 0; padding:28px 24px; width:100%; max-width:480px; max-height:90vh; overflow-y:auto; overflow-x:hidden; box-sizing:border-box; box-shadow:0 -8px 32px rgba(0,0,0,0.12); }
+.modal-sheet .form-input, .modal-sheet .form-row { max-width:100%; }
+.modal-sheet .modal-row { margin-left:0; margin-right:0; }
 .modal-sheet h3 { font-size:16px; font-weight:600; margin-bottom:20px; color:var(--text); }
 .modal-row { display:flex; gap:10px; margin-top:16px; }
 .modal-btn-primary { flex:1; padding:12px; background:var(--sky); color:#fff; border:none; border-radius:var(--radius-sm); font-size:14px; font-weight:700; cursor:pointer; }
@@ -342,22 +344,22 @@ textarea.form-input { resize:vertical; min-height:80px; }
 .cal-cell { aspect-ratio:1/1; padding:7px; background:var(--bg-3); border:1px solid transparent; border-radius:var(--radius-sm); display:flex; flex-direction:column; gap:2px; cursor:pointer; transition:all 0.2s; overflow:hidden; position:relative; }
 .cal-cell:hover:not(.empty) { filter:brightness(0.95); }
 .cal-cell.empty { background:transparent; border-color:transparent; cursor:default; }
-.cal-cell.good    { background:#D4EDDF; border-color:#A8D5BA; }
-.cal-cell.warning { background:#F5E8C0; border-color:#E8C96A; }
-.cal-cell.danger  { background:#F5D5D0; border-color:#E8A89E; }
+.cal-cell.good    { background:var(--sage-lt); border-color:var(--sage); }
+.cal-cell.warning { background:var(--but-lt);  border-color:var(--butter); }
+.cal-cell.danger  { background:var(--pch-lt);  border-color:var(--peach); }
 .cal-cell.today { border-color:var(--sky) !important; border-width:2px !important; background:var(--sky-lt) !important; }
 .cal-cell.today .cal-date { color:var(--sky) !important; font-weight:700; }
 .cal-cell.today .cal-dur  { color:#2E7AAA !important; }
 .cal-cell.has-note { position:relative; }
 .cal-cell.has-note::after { content:'•'; font-size:10px; color:rgba(0,0,0,0.3); position:absolute; top:5px; right:6px; line-height:1; }
 .cal-date { font-size:10px; color:var(--text-3); font-weight:600; line-height:1.2; }
-.cal-cell.good .cal-date    { color:#2E7A50; font-weight:700; }
-.cal-cell.warning .cal-date { color:#7A5010; font-weight:700; }
-.cal-cell.danger .cal-date  { color:#8A3028; font-weight:700; }
+.cal-cell.good .cal-date    { color:var(--sage); font-weight:700; }
+.cal-cell.warning .cal-date { color:var(--butter); font-weight:700; }
+.cal-cell.danger .cal-date  { color:var(--peach); font-weight:700; }
 .cal-dur { font-family:'DM Mono',monospace; font-size:9px; font-weight:700; white-space:nowrap; overflow:hidden; text-overflow:clip; display:block; max-width:100%; }
-.cal-cell.good .cal-dur    { color:#2A6E48; }
-.cal-cell.warning .cal-dur { color:#7A5010; }
-.cal-cell.danger .cal-dur  { color:#8A3028; }
+.cal-cell.good .cal-dur    { color:var(--sage); }
+.cal-cell.warning .cal-dur { color:var(--butter); }
+.cal-cell.danger .cal-dur  { color:var(--peach); }
 .cal-tray { font-size:10px; color:var(--text-3); }
 .cal-legend { display:flex; gap:16px; margin-top:14px; font-size:12px; color:var(--text-3); flex-wrap:wrap; }
 .note-date-header { font-size:14px; font-weight:600; margin-bottom:14px; color:var(--sky); }
@@ -444,3 +446,24 @@ textarea.form-input { resize:vertical; min-height:80px; }
 @media (min-width:769px) {
   .install-banner { bottom:24px; left:auto; right:24px; max-width:360px; }
 }
+
+/* ── Auth ── */
+.auth-section { margin-bottom:16px; }
+.auth-user-row { display:flex; align-items:center; gap:12px; padding:14px 0; border-bottom:1px solid var(--border); }
+.auth-avatar { width:40px; height:40px; border-radius:50%; background:var(--sky-lt); display:flex; align-items:center; justify-content:center; font-size:18px; color:var(--sky); font-weight:700; flex-shrink:0; }
+.auth-info { flex:1; min-width:0; }
+.auth-email { font-size:13px; font-weight:600; color:var(--text); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.auth-status { font-size:11px; color:var(--text-3); margin-top:1px; }
+.auth-logout-btn { padding:7px 14px; background:var(--pch-lt); border:1px solid rgba(217,123,108,0.3); color:var(--peach); border-radius:var(--radius-sm); font-size:12px; font-weight:600; cursor:pointer; white-space:nowrap; }
+.auth-logout-btn:hover { background:var(--pch-dim); }
+.auth-form { display:flex; flex-direction:column; gap:12px; }
+.auth-input { width:100%; padding:11px 14px; background:var(--bg-3); border:1px solid var(--border-2); border-radius:var(--radius-sm); color:var(--text); font-size:14px; font-family:'Inter',sans-serif; }
+.auth-input:focus { outline:none; border-color:var(--sky); background:var(--bg-2); }
+.auth-btn-row { display:flex; gap:10px; }
+.auth-btn-primary { flex:1; padding:11px; background:var(--sky); color:#fff; border:none; border-radius:var(--radius-sm); font-size:14px; font-weight:700; cursor:pointer; }
+.auth-btn-primary:hover { filter:brightness(1.06); }
+.auth-btn-secondary { padding:11px 16px; background:var(--bg-3); border:1px solid var(--border-2); color:var(--text-2); border-radius:var(--radius-sm); font-size:14px; cursor:pointer; }
+.auth-toggle { font-size:12px; color:var(--text-3); text-align:center; }
+.auth-toggle button { background:none; border:none; color:var(--sky); cursor:pointer; font-size:12px; text-decoration:underline; }
+.auth-error { font-size:12px; color:var(--peach); padding:8px 12px; background:var(--pch-lt); border-radius:var(--radius-sm); border:1px solid rgba(217,123,108,0.3); }
+.auth-success { font-size:12px; color:var(--sage); padding:8px 12px; background:var(--sage-lt); border-radius:var(--radius-sm); border:1px solid rgba(107,191,142,0.3); }

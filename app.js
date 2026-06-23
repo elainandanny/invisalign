@@ -4,6 +4,23 @@ const { createClient } = window.supabase;
 const db = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
 const WARN_SECONDS = MAX_OUT_SECONDS + 30 * 60;
+
+// ── Auth helpers ──
+async function getUser() {
+  const { data: { user } } = await db.auth.getUser();
+  state.user = user;
+  return user;
+}
+function uid() { return state.user?.id || null; }
+
+// Auth state change listener
+db.auth.onAuthStateChange((event, session) => {
+  state.user = session?.user || null;
+  if (event === 'SIGNED_IN' || event === 'SIGNED_OUT') {
+    // Reload all data and re-render when auth changes
+    loadAll().then(() => render());
+  }
+});
 let TOTAL_TRAYS  = 36; // overridden from Supabase settings on load
 const QUEUE_KEY    = 'invisalign_offline_queue';
 const TIMER_KEY    = 'sw_startedAt';
@@ -16,6 +33,8 @@ const state = {
   logFilter: '',
   darkMode: false,
   palette: 'default',
+  user: null,        // Supabase auth user
+  authMode: 'login', // 'login' | 'signup'
   running: false,
   startedAt: null,
   elapsed: 0,
@@ -188,18 +207,26 @@ async function loadAll() {
   applyTheme();
   if (!state.isOnline) return; // skip if offline, use cached state
   try {
+    const userId = uid();
     const [sess,notes,sched,tray] = await Promise.all([
-      db.from('sessions').select('*').order('started_at',{ascending:false}),
-      db.from('daily_notes').select('*'),
-      db.from('tray_schedule').select('*'),
-      db.from('settings').select('value').eq('key','current_tray').maybeSingle(),
+      userId ? db.from('sessions').select('*').eq('user_id',userId).order('started_at',{ascending:false})
+             : db.from('sessions').select('*').order('started_at',{ascending:false}),
+      userId ? db.from('daily_notes').select('*').eq('user_id',userId)
+             : db.from('daily_notes').select('*'),
+      userId ? db.from('tray_schedule').select('*').eq('user_id',userId)
+             : db.from('tray_schedule').select('*'),
+      userId ? db.from('settings').select('value').eq('key','current_tray').eq('user_id',userId).maybeSingle()
+             : db.from('settings').select('value').eq('key','current_tray').maybeSingle(),
     ]);
     if(!sess.error)  state.sessions = sess.data||[];
     if(!notes.error) { state.notes={}; (notes.data||[]).forEach(n=>state.notes[n.date_est]=n.note); }
     if(!sched.error) { state.traySchedule={}; (sched.data||[]).forEach(t=>state.traySchedule[t.tray_number]={start_date:t.start_date,days_to_wear:t.days_to_wear}); }
     if(tray.data)    { state.currentTray=parseInt(tray.data.value)||1; state.draftTray=state.currentTray; }
   // Load total trays setting
-  const totalTraySetting = await db.from('settings').select('value').eq('key','total_trays').maybeSingle();
+  const userId2 = uid();
+  const totalTraySetting = await (userId2
+    ? db.from('settings').select('value').eq('key','total_trays').eq('user_id',userId2).maybeSingle()
+    : db.from('settings').select('value').eq('key','total_trays').maybeSingle());
   if(totalTraySetting.data) TOTAL_TRAYS = parseInt(totalTraySetting.data.value)||36;
   } catch(e) {
     console.warn('loadAll failed (offline?):', e);
@@ -208,25 +235,41 @@ async function loadAll() {
 
 async function saveTray(tray) {
   state.currentTray=tray; state.draftTray=tray;
-  if(state.isOnline) await db.from('settings').upsert({key:'current_tray',value:String(tray)});
+  if(state.isOnline) {
+    const row = {key:'current_tray',value:String(tray)};
+    if(uid()) row.user_id = uid();
+    await db.from('settings').upsert(row);
+  }
 }
 
 async function saveTrayScheduleRow(trayNum,startDate,daysToWear) {
   state.traySchedule[trayNum]={start_date:startDate,days_to_wear:daysToWear};
-  if(state.isOnline) await db.from('tray_schedule').upsert({tray_number:trayNum,start_date:startDate,days_to_wear:daysToWear});
+  if(state.isOnline) {
+    const row = {tray_number:trayNum,start_date:startDate,days_to_wear:daysToWear};
+    if(uid()) row.user_id = uid();
+    await db.from('tray_schedule').upsert(row);
+  }
 }
 
 async function saveNote(dateEst,text) {
   if(!text.trim()) { delete state.notes[dateEst]; }
   else { state.notes[dateEst]=text.trim(); }
   if(state.isOnline) {
-    if(!text.trim()) await db.from('daily_notes').delete().eq('date_est',dateEst);
-    else await db.from('daily_notes').upsert({date_est:dateEst,note:text.trim(),updated_at:new Date().toISOString()});
+    if(!text.trim()) {
+      const q = db.from('daily_notes').delete().eq('date_est',dateEst);
+      if(uid()) q.eq('user_id',uid());
+      await q;
+    } else {
+      const row = {date_est:dateEst,note:text.trim(),updated_at:new Date().toISOString()};
+      if(uid()) row.user_id = uid();
+      await db.from('daily_notes').upsert(row);
+    }
   }
 }
 
 async function insertSession(sessionData) {
   if (state.isOnline) {
+    if(uid()) sessionData.user_id = uid();
     const { error } = await db.from('sessions').insert(sessionData);
     if (error) {
       console.error('Insert failed, queuing offline:', error);
@@ -686,7 +729,12 @@ function openSetupModal(){
 async function submitSetup(){
   const start=document.getElementById('setup-start')?.value; if(!start) return;
   const schedule=buildDefaultSchedule(start);
-  const rows=Object.entries(schedule).map(([t,v])=>({tray_number:parseInt(t),start_date:v.start_date,days_to_wear:v.days_to_wear}));
+  const userId3 = uid();
+  const rows=Object.entries(schedule).map(([t,v])=>{
+    const r={tray_number:parseInt(t),start_date:v.start_date,days_to_wear:v.days_to_wear};
+    if(userId3) r.user_id=userId3;
+    return r;
+  });
   if(state.isOnline) await db.from('tray_schedule').upsert(rows);
   state.traySchedule=schedule;
   closeModal(); render();
@@ -1270,7 +1318,9 @@ window.app={
   async saveTotalTrays(){
     const v = parseInt(document.getElementById('setting-total-trays')?.value)||36;
     TOTAL_TRAYS = v;
-    await db.from('settings').upsert({key:'total_trays', value:String(v)});
+    const tr = {key:'total_trays', value:String(v)};
+    if(uid()) tr.user_id = uid();
+    await db.from('settings').upsert(tr);
     showToastMessage(`✓ Total trays updated to ${v}`);
     renderSettings();
   },
@@ -1295,10 +1345,10 @@ window.app={
 async function init(){
   try{
     state.syncPending=getOfflineQueue().length;
+    await getUser(); // load auth state first
     await loadAll();
     restoreTimer();
     render();
-    // Try to sync any pending sessions on load
     if(state.isOnline&&state.syncPending>0) await syncOfflineQueue();
   } catch(e){
     document.getElementById('app').innerHTML=`<div style="text-align:center;padding:60px;color:var(--peach);"><p>⚠ Could not load app.</p><p style="font-size:13px;color:var(--text-2);margin-top:8px;">${e.message}</p></div>`;
@@ -1368,9 +1418,44 @@ window.addEventListener('appinstalled', () => {
     </div>`;
   }).join('');
 
+  const userEmail = state.user?.email || '';
+  const userInitial = userEmail ? userEmail[0].toUpperCase() : '?';
+
+  const authHTML = state.user ? `
+    <div class="card auth-section" style="margin-bottom:16px;">
+      <div class="section-title">Account</div>
+      <div class="auth-user-row">
+        <div class="auth-avatar">${userInitial}</div>
+        <div class="auth-info">
+          <div class="auth-email">${userEmail}</div>
+          <div class="auth-status">Signed in · data syncs across devices</div>
+        </div>
+        <button class="auth-logout-btn" onclick="app.signOut()">Sign out</button>
+      </div>
+    </div>` : `
+    <div class="card auth-section" style="margin-bottom:16px;">
+      <div class="section-title">Account</div>
+      <p style="font-size:13px;color:var(--text-2);margin-bottom:14px;">Sign in to sync your data across devices and keep it safe.</p>
+      <div class="auth-form" id="auth-form">
+        <input class="auth-input" type="email" id="auth-email" placeholder="Email address" autocomplete="email"/>
+        <input class="auth-input" type="password" id="auth-password" placeholder="Password" autocomplete="${state.authMode==='login'?'current-password':'new-password'}"/>
+        <div id="auth-msg"></div>
+        <div class="auth-btn-row">
+          <button class="auth-btn-primary" onclick="app.submitAuth()">${state.authMode==='login'?'Sign In':'Create Account'}</button>
+          <button class="auth-btn-secondary" onclick="app.closeModal()">Cancel</button>
+        </div>
+        <div class="auth-toggle">
+          ${state.authMode==='login'
+            ?`No account? <button onclick="app.toggleAuthMode()">Create one</button>`
+            ?`No account? <button onclick="app.toggleAuthMode()">Create one</button>`
+            :`Already have one? <button onclick="app.toggleAuthMode()">Sign in</button>`}
+        </div>
+      </div>
+    </div>`;
+
   document.querySelector('.main').innerHTML = `
     <div class="page-title">Settings</div>
-
+    ${authHTML}
     <div class="card" style="margin-bottom:16px;">
       <div class="section-title">Appearance</div>
       <div class="settings-row">
