@@ -1447,7 +1447,6 @@ window.addEventListener('appinstalled', () => {
         <div class="auth-toggle">
           ${state.authMode==='login'
             ?`No account? <button onclick="app.toggleAuthMode()">Create one</button>`
-            ?`No account? <button onclick="app.toggleAuthMode()">Create one</button>`
             :`Already have one? <button onclick="app.toggleAuthMode()">Sign in</button>`}
         </div>
       </div>
