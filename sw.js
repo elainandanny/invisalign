@@ -1,5 +1,8 @@
 // ── Invisalign Tracker — Service Worker ──
-const CACHE_NAME = 'invisalign-v4';
+// Cache name uses build date — update this date when you push new files
+// Format: YYYY-MM-DD  (just change the date, no need to increment numbers)
+const CACHE_NAME = 'invisalign-2026-06-23b';
+
 const STATIC_ASSETS = [
   './',
   './index.html',
@@ -15,7 +18,7 @@ const STATIC_ASSETS = [
 // Install: cache all static assets
 self.addEventListener('install', e => {
   e.waitUntil(
-    caches.open(CACHE_NAME).then(cache => cache.addAll(STATIC_ASSETS)).catch(()=>{})
+    caches.open(CACHE_NAME).then(cache => cache.addAll(STATIC_ASSETS)).catch(() => {})
   );
   self.skipWaiting();
 });
@@ -30,11 +33,10 @@ self.addEventListener('activate', e => {
   self.clients.claim();
 });
 
-// Fetch: cache-first for static, network-first for Supabase API
+// Fetch: network-first for Supabase, cache-first for everything else
 self.addEventListener('fetch', e => {
   const url = new URL(e.request.url);
 
-  // Always go network-first for Supabase API calls
   if (url.hostname.includes('supabase.co')) {
     e.respondWith(
       fetch(e.request).catch(() => new Response(
@@ -45,12 +47,10 @@ self.addEventListener('fetch', e => {
     return;
   }
 
-  // Cache-first for everything else (app shell, fonts, CDN)
   e.respondWith(
     caches.match(e.request).then(cached => {
       if (cached) return cached;
       return fetch(e.request).then(resp => {
-        // Cache successful GET responses
         if (e.request.method === 'GET' && resp.status === 200) {
           const clone = resp.clone();
           caches.open(CACHE_NAME).then(c => c.put(e.request, clone));

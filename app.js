@@ -858,6 +858,59 @@ function recentSessionsHTML(){
 }
 
 // ── Log ──
+// ── Smart filter parser ──
+// Supports:
+//   t1, t2 … t36     → tray number
+//   breakfast/lunch/dinner/other → meal tag
+//   >1h, >30m        → longer than duration
+//   <1h, <30m        → shorter than duration
+//   date fragment    → matches date_est (e.g. "06-22", "2026")
+function parseFilter(raw) {
+  const q = raw.trim().toLowerCase();
+  if (!q) return () => true;
+
+  // Tray: t1, tray1, tray 1
+  const trayMatch = q.match(/^t(?:ray\s*)?(\d+)$/);
+  if (trayMatch) {
+    const n = parseInt(trayMatch[1]);
+    return s => s.tray_number === n;
+  }
+
+  // Duration: >1h, >30m, <45m, <2h
+  const durMatch = q.match(/^([<>])(\d+)(h|m)$/);
+  if (durMatch) {
+    const op = durMatch[1];
+    const amount = parseInt(durMatch[2]);
+    const secs = durMatch[3] === 'h' ? amount * 3600 : amount * 60;
+    return op === '>' ? s => s.duration_seconds > secs : s => s.duration_seconds < secs;
+  }
+
+  // Meal: breakfast, lunch, dinner, other
+  const meals = ['breakfast','lunch','dinner','other'];
+  if (meals.some(m => m.startsWith(q) && q.length >= 2)) {
+    const meal = meals.find(m => m.startsWith(q));
+    return s => (s.meal_tag||'') === meal;
+  }
+
+  // Date fragment: matches date_est string
+  return s => (s.date_est||'').includes(q);
+}
+
+function applyLogFilter() {
+  const allSessions=[...state.sessions,...getOfflineQueue().map(s=>({...s,_offline:true}))];
+  const seen=new Set();
+  let sessions=allSessions.filter(s=>{if(seen.has(s.started_at))return false;seen.add(s.started_at);return true;});
+  sessions.sort((a,b)=>new Date(b.started_at)-new Date(a.started_at));
+  const filterFn = parseFilter(state.logFilter);
+  if(state.logFilter.trim()) sessions=sessions.filter(filterFn);
+  const container=document.getElementById('log-session-list');
+  const countEl=document.getElementById('log-count');
+  if(container) container.innerHTML=sessions.length
+    ?sessions.map(s=>logSessionRowHTML(s)).join('')
+    :`<p class="empty-state" style="padding:32px">No sessions match "${state.logFilter}"</p>`;
+  if(countEl) countEl.textContent=`${sessions.length} session${sessions.length!==1?'s':''}`;
+}
+
 function logSessionRowHTML(s){
   return `<div class="log-session-row ${s._offline?'log-session-offline':''}">
     <div class="log-col-date">
@@ -865,38 +918,33 @@ function logSessionRowHTML(s){
       <span class="log-time">${s.time_est||'—'}</span>
     </div>
     <div class="log-col-meal">
-      ${s._offline?'<span class="offline-pill">···</span>':(s.meal_tag
+      ${s._offline?'<span class="offline-pill" style="font-size:10px">sync</span>':(s.meal_tag
         ?`<button class="meal-pill meal-pill-btn" onclick="app.openEditMeal('${s.id}','${s.meal_tag}')">${s.meal_tag} ✎</button>`
         :`<button class="meal-pill-empty" onclick="app.openEditMeal('${s.id}','')">+ meal</button>`)}
     </div>
-    <div class="log-col-tray">
-      <span class="tray-pill">T${s.tray_number}</span>
-    </div>
-    <div class="log-col-dur">
-      <span class="log-duration" style="color:${statusColor(s.duration_seconds)}">${fmtDur(s.duration_seconds)}</span>
-    </div>
-    <div>
-      ${!s._offline?`<button class="delete-btn" onclick="app.askDelete('${s.id}','${s.date_est}')">✕</button>`:'<span style="color:var(--butter)">⟳</span>'}
-    </div>
+    <div class="log-col-tray"><span class="tray-pill">T${s.tray_number}</span></div>
+    <div class="log-col-dur"><span class="log-duration" style="color:${statusColor(s.duration_seconds)}">${fmtDur(s.duration_seconds)}</span></div>
+    <div class="log-col-del">${!s._offline?`<button class="delete-btn" onclick="app.askDelete('${s.id}','${s.date_est}')">✕</button>`:'<span style="color:var(--butter);font-size:12px">⟳</span>'}</div>
   </div>`;
 }
 
 function renderLog(){
-  const fv=state.logFilter;
   const allSessions=[...state.sessions,...getOfflineQueue().map(s=>({...s,_offline:true}))];
   const seen=new Set();
   let sessions=allSessions.filter(s=>{if(seen.has(s.started_at))return false;seen.add(s.started_at);return true;});
   sessions.sort((a,b)=>new Date(b.started_at)-new Date(a.started_at));
-  if(fv) sessions=sessions.filter(s=>s.date_est?.includes(fv)||String(s.tray_number).includes(fv)||(s.meal_tag||'').includes(fv));
+  const filterFn=parseFilter(state.logFilter);
+  if(state.logFilter.trim()) sessions=sessions.filter(filterFn);
 
   document.querySelector('.main').innerHTML=`
     <div class="page-title">Session Log</div>
     ${state.syncPending>0?`<div class="alert-bar warning">⟳ ${state.syncPending} session${state.syncPending!==1?'s':''} waiting to sync. <button onclick="app.syncNow()" style="background:none;border:none;color:var(--butter);cursor:pointer;font-weight:700;text-decoration:underline;">Sync now</button></div>`:''}
     <div class="log-filters">
-      <input class="filter-input" placeholder="Filter by date, tray, or meal…" id="log-filter" value="${fv}" oninput="app.setFilter(this.value)"/>
-      <span id="log-count" style="font-size:12px;color:var(--text-3)">${sessions.length} sessions</span>
-      <button class="sw-btn sw-btn-quick" style="padding:8px 14px;min-width:0;font-size:12px" onclick="app.openQuickAdd()">+ Past Session</button>
+      <input class="filter-input" placeholder="t1 · lunch · >30m · 06-22" id="log-filter" value="${state.logFilter}" oninput="app.setFilter(this.value)"/>
+      <span id="log-count" style="font-size:12px;color:var(--text-3);white-space:nowrap">${sessions.length} session${sessions.length!==1?'s':''}</span>
+      <button class="sw-btn sw-btn-quick" style="padding:8px 14px;min-width:0;font-size:12px" onclick="app.openQuickAdd()">+ Past</button>
     </div>
+    <p class="filter-hint">Try: <strong>t2</strong> for tray 2 &nbsp;·&nbsp; <strong>lunch</strong> &nbsp;·&nbsp; <strong>&gt;1h</strong> longer than 1h &nbsp;·&nbsp; <strong>&lt;30m</strong> shorter than 30m &nbsp;·&nbsp; <strong>06-22</strong> by date</p>
     <div class="card" style="padding:0 0 8px;" id="log-session-list">
       ${sessions.length?sessions.map(s=>logSessionRowHTML(s)).join(''):`<p class="empty-state" style="padding:32px">No sessions yet.</p>`}
     </div>`;
@@ -1100,17 +1148,8 @@ window.app={
   navigate(v){state.view=v;render();},
   filterLog(){renderLog();},
   setFilter(val){
-    state.logFilter=val.toLowerCase();
-    // Re-render only the session list, not the whole page (preserves input focus)
-    const allSessions=[...state.sessions,...getOfflineQueue().map(s=>({...s,_offline:true}))];
-    const seen=new Set();
-    let sessions=allSessions.filter(s=>{if(seen.has(s.started_at))return false;seen.add(s.started_at);return true;});
-    sessions.sort((a,b)=>new Date(b.started_at)-new Date(a.started_at));
-    if(state.logFilter) sessions=sessions.filter(s=>s.date_est?.includes(state.logFilter)||String(s.tray_number).includes(state.logFilter)||(s.meal_tag||'').includes(state.logFilter));
-    const container=document.getElementById('log-session-list');
-    const countEl=document.getElementById('log-count');
-    if(container) container.innerHTML=sessions.length?sessions.map(s=>logSessionRowHTML(s)).join(''):`<p class="empty-state" style="padding:32px">No sessions found.</p>`;
-    if(countEl) countEl.textContent=`${sessions.length} sessions`;
+    state.logFilter=val;
+    applyLogFilter();
   },
   calPrev(){state.calMonth--;if(state.calMonth<0){state.calMonth=11;state.calYear--;}renderCalendar();},
   calNext(){state.calMonth++;if(state.calMonth>11){state.calMonth=0;state.calYear++;}renderCalendar();},
