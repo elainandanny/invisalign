@@ -260,14 +260,30 @@ async function saveNote(dateEst,text) {
   if(!text.trim()) { delete state.notes[dateEst]; }
   else { state.notes[dateEst]=text.trim(); }
   if(state.isOnline) {
+    const userId = uid();
     if(!text.trim()) {
-      const q = db.from('daily_notes').delete().eq('date_est',dateEst);
-      if(uid()) q.eq('user_id',uid());
+      // Delete
+      let q = db.from('daily_notes').delete().eq('date_est',dateEst);
+      if(userId) q = q.eq('user_id',userId);
       await q;
     } else {
-      const row = {date_est:dateEst,note:text.trim(),updated_at:new Date().toISOString()};
-      if(uid()) row.user_id = uid();
-      await db.from('daily_notes').upsert(row);
+      // Check if note exists first, then update or insert
+      let existing;
+      if(userId) {
+        const {data} = await db.from('daily_notes').select('id').eq('date_est',dateEst).eq('user_id',userId).maybeSingle();
+        existing = data;
+      }
+      if(existing) {
+        // Update existing note
+        await db.from('daily_notes')
+          .update({note:text.trim(), updated_at:new Date().toISOString()})
+          .eq('id', existing.id);
+      } else {
+        // Insert new note
+        const row = {date_est:dateEst, note:text.trim(), updated_at:new Date().toISOString()};
+        if(userId) row.user_id = userId;
+        await db.from('daily_notes').insert(row);
+      }
     }
   }
 }
