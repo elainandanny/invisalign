@@ -670,37 +670,7 @@ function trayProgressCardHTML(){
     ${!hasSchedule?`<button class="sw-btn sw-btn-quick" style="width:100%;padding:8px;margin-top:8px;" onclick="app.openSetup()">Auto-generate All ${TOTAL_TRAYS} Trays</button>`:''}
   </div>`;
 }
-  const trayInfo=currentTrayInfo();
-  const hasSchedule=Object.keys(state.traySchedule).length>0;
-  if(trayInfo){
-    return `<div class="card" id="tray-progress-card">
-      <div class="section-title">Tray Progress</div>
-      <div class="tray-card">
-        <div class="tray-ring">
-          <svg width="72" height="72" viewBox="0 0 72 72">
-            <circle cx="36" cy="36" r="28" fill="none" stroke="var(--bg-3)" stroke-width="7"/>
-            <circle cx="36" cy="36" r="28" fill="none" stroke="var(--lavender)" stroke-width="7" stroke-linecap="round"
-              stroke-dasharray="${2*Math.PI*28}" stroke-dashoffset="${2*Math.PI*28*(1-trayInfo.pct/100)}"
-              transform="rotate(-90 36 36)"/>
-          </svg>
-          <div class="tray-pct">${trayInfo.pct}%</div>
-        </div>
-        <div class="tray-info">
-          <h3>Tray #${state.currentTray} of ${TOTAL_TRAYS}</h3>
-          <p>Day <strong>${trayInfo.daysOn}</strong> of ${trayInfo.daysToWear} &nbsp;·&nbsp; <strong style="color:${trayInfo.daysLeft<=2?'var(--peach)':trayInfo.daysLeft<=4?'var(--butter)':'var(--sage)'}">${trayInfo.daysLeft}d left</strong></p>
-          <p style="font-size:12px;color:var(--text-3);margin-top:2px;">Change on ${new Date(trayInfo.endDate+'T12:00:00').toLocaleDateString('en-US',{month:'short',day:'numeric'})}</p>
-          <button class="tray-edit-btn" onclick="app.openTrayScheduleModal(${state.currentTray})">Edit schedule</button>
-        </div>
-      </div>
-    </div>`;
-  }
-  return `<div class="card" id="tray-progress-card">
-    <div class="section-title">Tray Schedule</div>
-    <p style="font-size:13px;color:var(--text-2);margin-bottom:12px;">${hasSchedule?`Tray #${state.currentTray} not configured.`:'Set up your schedule for change countdowns.'}</p>
-    <button class="sw-btn sw-btn-quick" style="width:100%;padding:8px;" onclick="app.openTrayScheduleModal(${state.currentTray})">${hasSchedule?`Configure Tray #${state.currentTray}`:'Configure This Tray'}</button>
-    ${!hasSchedule?`<button class="sw-btn sw-btn-quick" style="width:100%;padding:8px;margin-top:8px;" onclick="app.openSetup()">Auto-generate All 36 Trays</button>`:''}
-  </div>`;
-}
+  
 
 function openTrayModal(){
   state.draftTray=state.currentTray;
