@@ -1326,9 +1326,75 @@ window.app={
   },
   saveWearLimit(){
     const v = parseFloat(document.getElementById('setting-wear-limit')?.value)||2;
-    // Update the module-level constant via reassignment isn't possible, store and reload
     localStorage.setItem('wearLimit', v);
     showToastMessage(`✓ Wear limit set to ${v}h — takes effect on next load`);
+  },
+  toggleAuthMode(){
+    state.authMode = state.authMode==='login' ? 'signup' : 'login';
+    renderSettings();
+    setTimeout(()=>document.getElementById('auth-email')?.focus(), 50);
+  },
+  async submitAuth(){
+    const email = document.getElementById('auth-email')?.value?.trim();
+    const password = document.getElementById('auth-password')?.value;
+    const msgEl = document.getElementById('auth-msg');
+    const setMsg = (html) => { if(msgEl) msgEl.innerHTML = html; };
+
+    if(!email || !password)  { setMsg('<div class="auth-error">Please enter your email and password.</div>'); return; }
+    if(password.length < 6)  { setMsg('<div class="auth-error">Password must be at least 6 characters.</div>'); return; }
+
+    setMsg('<div style="font-size:12px;color:var(--text-3)">Please wait...</div>');
+
+    let result;
+    if(state.authMode === 'login') {
+      result = await db.auth.signInWithPassword({email, password});
+      if(result.error) {
+        setMsg('<div class="auth-error">Incorrect email or password.</div>');
+        return;
+      }
+    } else {
+      result = await db.auth.signUp({email, password});
+      if(result.error) {
+        setMsg(`<div class="auth-error">${result.error.message}</div>`);
+        return;
+      }
+      if(!result.data.session) {
+        // Email confirmation is enabled in Supabase
+        // Switch to login mode and show clear message
+        state.authMode = 'login';
+        setMsg('<div class="auth-success">Account created! Check your email for a confirmation link, then sign in here.</div>');
+        renderSettings();
+        // Re-inject the message since renderSettings rebuilds the DOM
+        setTimeout(()=>{
+          const m = document.getElementById('auth-msg');
+          if(m) m.innerHTML = '<div class="auth-success">Account created! Check your email to confirm, then sign in.</div>';
+        }, 50);
+        return;
+      }
+    }
+    state.user = result.data.user || result.data.session?.user;
+    // Claim any existing null user_id data for this new user
+    if(state.user && state.isOnline) {
+      const uid2 = state.user.id;
+      await Promise.all([
+        db.from('sessions').update({user_id:uid2}).is('user_id',null),
+        db.from('settings').update({user_id:uid2}).is('user_id',null),
+        db.from('daily_notes').update({user_id:uid2}).is('user_id',null),
+        db.from('tray_schedule').update({user_id:uid2}).is('user_id',null),
+      ]);
+    }
+    await loadAll();
+    render();
+    showToastMessage('✓ Signed in successfully');
+  },
+  async signOut(){
+    await db.auth.signOut();
+    state.user = null;
+    state.sessions = [];
+    state.notes = {};
+    state.traySchedule = {};
+    state.currentTray = 1;
+    render();
   },
   openEditMeal: openEditMealModal,
   selectEditMeal(meal){ window.app_selectEditMeal(meal); },
@@ -1438,11 +1504,10 @@ window.addEventListener('appinstalled', () => {
       <p style="font-size:13px;color:var(--text-2);margin-bottom:14px;">Sign in to sync your data across devices and keep it safe.</p>
       <div class="auth-form" id="auth-form">
         <input class="auth-input" type="email" id="auth-email" placeholder="Email address" autocomplete="email"/>
-        <input class="auth-input" type="password" id="auth-password" placeholder="Password" autocomplete="${state.authMode==='login'?'current-password':'new-password'}"/>
+        <input class="auth-input" type="password" id="auth-password" placeholder="Password (min 6 characters)" autocomplete="${state.authMode==='login'?'current-password':'new-password'}"/>
         <div id="auth-msg"></div>
         <div class="auth-btn-row">
           <button class="auth-btn-primary" onclick="app.submitAuth()">${state.authMode==='login'?'Sign In':'Create Account'}</button>
-          <button class="auth-btn-secondary" onclick="app.closeModal()">Cancel</button>
         </div>
         <div class="auth-toggle">
           ${state.authMode==='login'
