@@ -319,8 +319,6 @@ async function stopTimer() {
   const ok = await insertSession(sessionData);
 
   if (ok) {
-    const rs = document.getElementById('recent-sessions');
-    if(rs) rs.innerHTML = recentSessionsHTML();
     renderStats();
     updateSWDisplay();
     if (!state.isOnline) {
@@ -560,8 +558,45 @@ function drumDown(id){ /* kept for compat */ }
 async function saveTrayFromDrum(drumId){
   const v=state.draftTray;
   await saveTray(v); closeModal();
+  // Update all tray labels
   document.querySelectorAll('.sw-tray-lbl').forEach(el=>el.textContent=`#${v}`);
   document.querySelectorAll('.mobile-tray-btn').forEach(el=>el.innerHTML=`Tray #${v}`);
+  // Re-render tray progress card in place — no full page reload needed
+  const trayCard=document.getElementById('tray-progress-card');
+  if(trayCard) trayCard.outerHTML=trayProgressCardHTML();
+}
+
+function trayProgressCardHTML(){
+  const trayInfo=currentTrayInfo();
+  const hasSchedule=Object.keys(state.traySchedule).length>0;
+  if(trayInfo){
+    return `<div class="card" id="tray-progress-card">
+      <div class="section-title">Tray Progress</div>
+      <div class="tray-card">
+        <div class="tray-ring">
+          <svg width="72" height="72" viewBox="0 0 72 72">
+            <circle cx="36" cy="36" r="28" fill="none" stroke="var(--bg-3)" stroke-width="7"/>
+            <circle cx="36" cy="36" r="28" fill="none" stroke="var(--lavender)" stroke-width="7" stroke-linecap="round"
+              stroke-dasharray="${2*Math.PI*28}" stroke-dashoffset="${2*Math.PI*28*(1-trayInfo.pct/100)}"
+              transform="rotate(-90 36 36)"/>
+          </svg>
+          <div class="tray-pct">${trayInfo.pct}%</div>
+        </div>
+        <div class="tray-info">
+          <h3>Tray #${state.currentTray} of ${TOTAL_TRAYS}</h3>
+          <p>Day <strong>${trayInfo.daysOn}</strong> of ${trayInfo.daysToWear} &nbsp;·&nbsp; <strong style="color:${trayInfo.daysLeft<=2?'var(--peach)':trayInfo.daysLeft<=4?'var(--butter)':'var(--sage)'}">${trayInfo.daysLeft}d left</strong></p>
+          <p style="font-size:12px;color:var(--text-3);margin-top:2px;">Change on ${new Date(trayInfo.endDate+'T12:00:00').toLocaleDateString('en-US',{month:'short',day:'numeric'})}</p>
+          <button class="tray-edit-btn" onclick="app.openTrayScheduleModal(${state.currentTray})">Edit schedule</button>
+        </div>
+      </div>
+    </div>`;
+  }
+  return `<div class="card" id="tray-progress-card">
+    <div class="section-title">Tray Schedule</div>
+    <p style="font-size:13px;color:var(--text-2);margin-bottom:12px;">${hasSchedule?`Tray #${state.currentTray} not configured.`:'Set up your schedule for change countdowns.'}</p>
+    <button class="sw-btn sw-btn-quick" style="width:100%;padding:8px;" onclick="app.openTrayScheduleModal(${state.currentTray})">${hasSchedule?`Configure Tray #${state.currentTray}`:'Configure This Tray'}</button>
+    ${!hasSchedule?`<button class="sw-btn sw-btn-quick" style="width:100%;padding:8px;margin-top:8px;" onclick="app.openSetup()">Auto-generate All 36 Trays</button>`:''}
+  </div>`;
 }
 
 function openTrayModal(){
@@ -786,43 +821,13 @@ function dashboardHTML(){
         </div>
       </div>
 
-      ${trayInfo?`
-      <div class="card">
-        <div class="section-title">Tray Progress</div>
-        <div class="tray-card">
-          <div class="tray-ring">
-            <svg width="72" height="72" viewBox="0 0 72 72">
-              <circle cx="36" cy="36" r="28" fill="none" stroke="var(--bg-3)" stroke-width="7"/>
-              <circle cx="36" cy="36" r="28" fill="none" stroke="var(--lavender)" stroke-width="7" stroke-linecap="round"
-                stroke-dasharray="${2*Math.PI*28}" stroke-dashoffset="${2*Math.PI*28*(1-trayInfo.pct/100)}"
-                transform="rotate(-90 36 36)"/>
-            </svg>
-            <div class="tray-pct">${trayInfo.pct}%</div>
-          </div>
-          <div class="tray-info">
-            <h3>Tray #${state.currentTray} of ${TOTAL_TRAYS}</h3>
-            <p>Day <strong>${trayInfo.daysOn}</strong> of ${trayInfo.daysToWear} &nbsp;·&nbsp; <strong style="color:${trayInfo.daysLeft<=2?'var(--peach)':trayInfo.daysLeft<=4?'var(--butter)':'var(--sage)'}">${trayInfo.daysLeft}d left</strong></p>
-            <p style="font-size:12px;color:var(--text-3);margin-top:2px;">Change on ${new Date(trayInfo.endDate+'T12:00:00').toLocaleDateString('en-US',{month:'short',day:'numeric'})}</p>
-            <button class="tray-edit-btn" onclick="app.openTrayScheduleModal(${state.currentTray})">Edit schedule</button>
-          </div>
-        </div>
-      </div>`:`
-      <div class="card">
-        <div class="section-title">Tray Schedule</div>
-        <p style="font-size:13px;color:var(--text-2);margin-bottom:12px;">${hasSchedule?`Tray #${state.currentTray} not configured.`:'Set up your schedule for change countdowns.'}</p>
-        <button class="sw-btn sw-btn-quick" style="width:100%;padding:8px;" onclick="app.openTrayScheduleModal(${state.currentTray})">${hasSchedule?`Configure Tray #${state.currentTray}`:'Configure This Tray'}</button>
-        ${!hasSchedule?`<button class="sw-btn sw-btn-quick" style="width:100%;padding:8px;margin-top:8px;" onclick="app.openSetup()">Auto-generate All 36 Trays</button>`:''}
-      </div>`}
+      ${trayProgressCardHTML()}
 
       <div class="card">
         <div class="section-title">Today's Note</div>
         <div id="today-note">${todayNoteHTML()}</div>
       </div>
 
-      <div class="card span-full">
-        <div class="section-title">Recent Sessions</div>
-        <div id="recent-sessions">${recentSessionsHTML()}</div>
-      </div>
     </div>`;
 }
 
@@ -860,28 +865,27 @@ function renderLog(){
   sessions.sort((a,b)=>new Date(b.started_at)-new Date(a.started_at));
   if(fv) sessions=sessions.filter(s=>s.date_est?.includes(fv)||String(s.tray_number).includes(fv)||(s.meal_tag||'').includes(fv));
 
-  const rows=sessions.map(s=>`<tr ${s._offline?'style="opacity:0.7"':''}>
-    <td class="mono">${s.date_est||'—'}</td><td>${s.time_est||'—'}</td>
-    <td class="mono" style="color:${statusColor(s.duration_seconds)}">${fmtDur(s.duration_seconds)}</td>
-    <td><span class="tray-pill">T${s.tray_number}</span></td>
-    <td>${s._offline?'':(s.meal_tag
-      ?`<button class="meal-pill meal-pill-btn" onclick="app.openEditMeal('${s.id}','${s.meal_tag}')">${s.meal_tag} ✎</button>`
-      :`<button class="meal-pill-empty" onclick="app.openEditMeal('${s.id}','')">+ meal</button>`)}</td>
-    <td>${s._offline?'<span class="offline-pill">pending</span>':`<button class="delete-btn" onclick="app.askDelete('${s.id}','${s.date_est}')">✕</button>`}</td>
-  </tr>`).join('');
-
-  const cards=sessions.map(s=>`<div class="log-card" ${s._offline?'style="opacity:0.75"':''}>
-    <div class="log-card-left"><div class="log-card-date">${s.date_est||'—'} ${s._offline?'<span class="offline-pill">pending</span>':''}</div><div class="log-card-time">${s.time_est||''}${s.meal_tag?' · '+s.meal_tag:''}</div></div>
-    <div class="log-card-right">
-      <div class="log-card-dur" style="color:${statusColor(s.duration_seconds)}">${fmtDur(s.duration_seconds)}</div>
-      <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;justify-content:flex-end;">
-        ${s._offline?'':(s.meal_tag
+  // Session cards — same style as recent sessions, 3-column layout
+  const sessionCards = sessions.map(s=>`
+    <div class="log-session-row ${s._offline?'log-session-offline':''}">
+      <!-- Left: date + time -->
+      <div class="log-col-date">
+        <div class="log-date">${s.date_est||'—'}</div>
+        <div class="log-time">${s.time_est||'—'}</div>
+      </div>
+      <!-- Middle: tag + tray -->
+      <div class="log-col-tags">
+        ${s._offline?'<span class="offline-pill">pending</span>':(s.meal_tag
           ?`<button class="meal-pill meal-pill-btn" onclick="app.openEditMeal('${s.id}','${s.meal_tag}')">${s.meal_tag} ✎</button>`
           :`<button class="meal-pill-empty" onclick="app.openEditMeal('${s.id}','')">+ meal</button>`)}
         <span class="tray-pill">T${s.tray_number}</span>
-        ${!s._offline?`<button class="delete-btn" onclick="app.askDelete('${s.id}','${s.date_est}')">✕</button>`:'<span style="color:var(--butter)">⟳</span>'}
       </div>
-    </div></div>`).join('');
+      <!-- Right: duration + delete -->
+      <div class="log-col-dur">
+        <span class="log-duration" style="color:${statusColor(s.duration_seconds)}">${fmtDur(s.duration_seconds)}</span>
+        ${!s._offline?`<button class="delete-btn" onclick="app.askDelete('${s.id}','${s.date_est}')">✕</button>`:'<span style="color:var(--butter);font-size:14px">⟳</span>'}
+      </div>
+    </div>`).join('');
 
   document.querySelector('.main').innerHTML=`
     <div class="page-title">Session Log</div>
@@ -891,11 +895,9 @@ function renderLog(){
       <span style="font-size:12px;color:var(--text-3)">${sessions.length} sessions</span>
       <button class="sw-btn sw-btn-quick" style="padding:8px 14px;min-width:0;font-size:12px" onclick="app.openQuickAdd()">+ Past Session</button>
     </div>
-    ${!sessions.length?`<div class="card"><p class="empty-state">No sessions found.</p></div>`:`
-      <div class="log-table-wrap card" style="padding:0;overflow:hidden;">
-        <table class="log-table"><thead><tr><th>Date</th><th>Time</th><th>Duration</th><th>Tray</th><th>Meal</th><th></th></tr></thead>
-        <tbody>${rows}</tbody></table></div>
-      <div class="log-cards">${cards}</div>`}`;
+    ${!sessions.length
+      ?`<div class="card"><p class="empty-state">No sessions found.</p></div>`
+      :`<div class="card" style="padding:0 0 8px;">${sessionCards}</div>`}`;
 }
 
 // ── Progress ──
@@ -1064,7 +1066,7 @@ function renderCalendar(){
 
 // ── Render ──
 function refreshView(){
-  if(state.view==='dashboard'){const rs=document.getElementById('recent-sessions');if(rs)rs.innerHTML=recentSessionsHTML();updateSWDisplay();}
+  if(state.view==='dashboard'){updateSWDisplay();}
   if(state.view==='log')      renderLog();
   if(state.view==='graphs')   renderGraphs();
   if(state.view==='calendar') renderCalendar();

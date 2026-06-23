@@ -269,11 +269,11 @@ textarea.form-input { resize:vertical; min-height:80px; }
 .cal-cell.today .cal-dur   { color:#2E7AAA !important; }
 .cal-cell.today .cal-date { color:var(--sky); font-weight:700; }
 .cal-cell.has-note::after { content:'•'; font-size:12px; color:rgba(0,0,0,0.25); align-self:flex-end; margin-top:auto; }
-.cal-date { font-size:12px; color:var(--text-3); font-weight:500; }
+.cal-date { font-size:11px; color:var(--text-3); font-weight:500; line-height:1.2; }
 .cal-cell.good .cal-date    { color:#2E7A50; font-weight:700; }
 .cal-cell.warning .cal-date { color:#7A5010; font-weight:700; }
 .cal-cell.danger .cal-date  { color:#8A3028; font-weight:700; }
-.cal-dur { font-family:'DM Mono',monospace; font-size:11px; font-weight:700; }
+.cal-dur { font-family:'DM Mono',monospace; font-size:10px; font-weight:700; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
 .cal-cell.good .cal-dur    { color:#2A6E48; }
 .cal-cell.warning .cal-dur { color:#7A5010; }
 .cal-cell.danger .cal-dur  { color:#8A3028; }
@@ -292,14 +292,23 @@ textarea.form-input { resize:vertical; min-height:80px; }
 .toast-confirm { background:var(--peach); color:#fff; border:none; padding:6px 12px; border-radius:var(--radius-sm); cursor:pointer; font-size:12px; font-weight:700; }
 .toast-cancel  { background:none; border:none; color:var(--text-3); cursor:pointer; font-size:12px; padding:6px 8px; }
 
-/* ── Mobile log cards ── */
-.log-cards { display:flex; flex-direction:column; gap:10px; }
-.log-card { background:var(--bg-2); border:1px solid var(--border); border-radius:var(--radius-sm); padding:14px; display:flex; justify-content:space-between; align-items:center; }
-.log-card-left  { display:flex; flex-direction:column; gap:3px; }
-.log-card-date  { font-size:13px; color:var(--text); font-weight:600; }
-.log-card-time  { font-size:11px; color:var(--text-3); }
-.log-card-right { display:flex; flex-direction:column; align-items:flex-end; gap:5px; }
-.log-card-dur   { font-family:'DM Mono',monospace; font-size:15px; font-weight:600; }
+/* ── Log session rows ── */
+.log-session-row {
+  display:grid;
+  grid-template-columns: 1fr auto auto;
+  align-items:center;
+  gap:10px;
+  padding:12px 20px;
+  border-bottom:1px solid var(--border);
+}
+.log-session-row:last-child { border-bottom:none; }
+.log-session-offline { opacity:0.7; }
+.log-col-date { display:flex; flex-direction:column; gap:2px; }
+.log-date { font-size:13px; color:var(--text); font-weight:600; }
+.log-time { font-size:11px; color:var(--text-3); }
+.log-col-tags { display:flex; flex-direction:column; gap:5px; align-items:flex-start; }
+.log-col-dur { display:flex; align-items:center; gap:8px; }
+.log-duration { font-family:'DM Mono',monospace; font-size:14px; font-weight:700; white-space:nowrap; }
 
 /* ── Tray schedule overview ── */
 .tray-schedule-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(72px,1fr)); gap:8px; margin-top:4px; }
@@ -333,14 +342,10 @@ textarea.form-input { resize:vertical; min-height:80px; }
   .cal-cell { padding:5px; }
   .cal-note-preview { display:none; }
   .cal-tray { display:none; }
-  .log-table-wrap { display:none; }
   .toast { bottom:calc(var(--nav-h) + 10px); width:calc(100% - 32px); white-space:normal; }
   .tray-schedule-grid { grid-template-columns:repeat(auto-fill,minmax(56px,1fr)); }
 }
-@media (min-width:769px) {
-  .log-cards { display:none; }
-  .log-table-wrap { display:block; }
-}
+
 
 /* ── Offline / Sync UI ── */
 .offline-dot {
