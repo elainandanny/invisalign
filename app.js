@@ -4,6 +4,7 @@ const { createClient } = window.supabase;
 const db = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
 const WARN_SECONDS = MAX_OUT_SECONDS + 30 * 60;
+const DEMO_USER_ID = '00000000-0000-0000-0000-000000000001';
 
 // ── Auth helpers ──
 async function getUser() {
@@ -209,14 +210,18 @@ async function loadAll() {
   try {
     const userId = uid();
     const [sess,notes,sched,tray] = await Promise.all([
-      userId ? db.from('sessions').select('*').eq('user_id',userId).order('started_at',{ascending:false})
-             : db.from('sessions').select('*').order('started_at',{ascending:false}),
-      userId ? db.from('daily_notes').select('*').eq('user_id',userId)
-             : db.from('daily_notes').select('*'),
-      userId ? db.from('tray_schedule').select('*').eq('user_id',userId)
-             : db.from('tray_schedule').select('*'),
-      userId ? db.from('settings').select('value').eq('key','current_tray').eq('user_id',userId).maybeSingle()
-             : db.from('settings').select('value').eq('key','current_tray').maybeSingle(),
+      userId
+        ? db.from('sessions').select('*').eq('user_id',userId).order('started_at',{ascending:false})
+        : db.from('sessions').select('*').eq('user_id',DEMO_USER_ID).order('started_at',{ascending:false}),
+      userId
+        ? db.from('daily_notes').select('*').eq('user_id',userId)
+        : db.from('daily_notes').select('*').eq('user_id',DEMO_USER_ID),
+      userId
+        ? db.from('tray_schedule').select('*').eq('user_id',userId)
+        : db.from('tray_schedule').select('*').eq('user_id',DEMO_USER_ID),
+      userId
+        ? db.from('settings').select('value').eq('key','current_tray').eq('user_id',userId).maybeSingle()
+        : db.from('settings').select('value').eq('key','current_tray').eq('user_id',DEMO_USER_ID).maybeSingle(),
     ]);
     if(!sess.error)  state.sessions = sess.data||[];
     if(!notes.error) { state.notes={}; (notes.data||[]).forEach(n=>state.notes[n.date_est]=n.note); }
@@ -226,7 +231,7 @@ async function loadAll() {
   const userId2 = uid();
   const totalTraySetting = await (userId2
     ? db.from('settings').select('value').eq('key','total_trays').eq('user_id',userId2).maybeSingle()
-    : db.from('settings').select('value').eq('key','total_trays').maybeSingle());
+    : db.from('settings').select('value').eq('key','total_trays').eq('user_id',DEMO_USER_ID).maybeSingle());
   if(totalTraySetting.data) TOTAL_TRAYS = parseInt(totalTraySetting.data.value)||36;
   } catch(e) {
     console.warn('loadAll failed (offline?):', e);
@@ -268,8 +273,12 @@ async function saveNote(dateEst,text) {
 }
 
 async function insertSession(sessionData) {
+  if (!uid()) {
+    showToastMessage('Sign in to save sessions to your account');
+    return false;
+  }
   if (state.isOnline) {
-    if(uid()) sessionData.user_id = uid();
+    sessionData.user_id = uid();
     const { error } = await db.from('sessions').insert(sessionData);
     if (error) {
       console.error('Insert failed, queuing offline:', error);
@@ -354,6 +363,13 @@ function startTimer() {
 
 async function stopTimer() {
   if(!state.running) return;
+  if(!uid()) {
+    clearInterval(state.ticker);
+    state.running=false; state.elapsed=0; state.startedAt=null; state.activeMealTag=null;
+    persistTimer(); renderSWButtons(); updateSWDisplay();
+    showToastMessage('Sign in to save sessions to your account');
+    return;
+  }
   clearInterval(state.ticker); state.running=false;
 
   // Capture everything BEFORE clearing state
@@ -891,6 +907,9 @@ function dashboardHTML(){
 
   return `
     <div class="page-title">Dashboard</div>
+    ${!state.user ? `<div class="alert-bar info" style="cursor:pointer" onclick="app.navigate('settings')">
+      👋 <span><strong>Demo mode</strong> — you're viewing sample data. <u>Sign in</u> to track your own aligners.</span>
+    </div>` : ''}
     ${!state.isOnline?`<div class="alert-bar info">📴 You're offline — sessions will save locally and sync when you reconnect.</div>`:''}
     <div id="sw-alert" class="alert-bar" style="display:none"></div>
     <div class="dash-grid">
@@ -1048,6 +1067,9 @@ function renderLog(){
 
   document.querySelector('.main').innerHTML=`
     <div class="page-title">Session Log</div>
+    ${!state.user ? `<div class="alert-bar info" onclick="app.navigate('settings')" style="cursor:pointer;margin-bottom:12px">
+      👋 <span>Demo data — <u>sign in</u> to see your own sessions.</span>
+    </div>` : ''}
     ${state.syncPending>0?`<div class="alert-bar warning">⟳ ${state.syncPending} session${state.syncPending!==1?'s':''} waiting to sync. <button onclick="app.syncNow()" style="background:none;border:none;color:var(--butter);cursor:pointer;font-weight:700;text-decoration:underline;">Sync now</button></div>`:''}
     <div class="log-filters">
       <input class="filter-input" placeholder="t1 · lunch · >30m · 06-22" id="log-filter" value="${state.logFilter}" oninput="app.setFilter(this.value)"/>
