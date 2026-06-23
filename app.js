@@ -864,15 +864,19 @@ function logSessionRowHTML(s){
       <span class="log-date">${s.date_est||'—'}</span>
       <span class="log-time">${s.time_est||'—'}</span>
     </div>
-    <div class="log-col-tags">
-      ${s._offline?'<span class="offline-pill">pending</span>':(s.meal_tag
+    <div class="log-col-meal">
+      ${s._offline?'<span class="offline-pill">···</span>':(s.meal_tag
         ?`<button class="meal-pill meal-pill-btn" onclick="app.openEditMeal('${s.id}','${s.meal_tag}')">${s.meal_tag} ✎</button>`
         :`<button class="meal-pill-empty" onclick="app.openEditMeal('${s.id}','')">+ meal</button>`)}
+    </div>
+    <div class="log-col-tray">
       <span class="tray-pill">T${s.tray_number}</span>
     </div>
     <div class="log-col-dur">
       <span class="log-duration" style="color:${statusColor(s.duration_seconds)}">${fmtDur(s.duration_seconds)}</span>
-      ${!s._offline?`<button class="delete-btn" onclick="app.askDelete('${s.id}','${s.date_est}')">✕</button>`:'<span style="color:var(--butter);font-size:14px">⟳</span>'}
+    </div>
+    <div>
+      ${!s._offline?`<button class="delete-btn" onclick="app.askDelete('${s.id}','${s.date_est}')">✕</button>`:'<span style="color:var(--butter)">⟳</span>'}
     </div>
   </div>`;
 }

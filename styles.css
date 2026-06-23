@@ -269,11 +269,11 @@ textarea.form-input { resize:vertical; min-height:80px; }
 .cal-cell.today .cal-dur   { color:#2E7AAA !important; }
 .cal-cell.today .cal-date { color:var(--sky); font-weight:700; }
 .cal-cell.has-note::after { content:'•'; font-size:12px; color:rgba(0,0,0,0.25); align-self:flex-end; margin-top:auto; }
-.cal-date { font-size:11px; color:var(--text-3); font-weight:500; line-height:1.2; }
+.cal-date { font-size:10px; color:var(--text-3); font-weight:600; line-height:1.2; }
 .cal-cell.good .cal-date    { color:#2E7A50; font-weight:700; }
 .cal-cell.warning .cal-date { color:#7A5010; font-weight:700; }
 .cal-cell.danger .cal-date  { color:#8A3028; font-weight:700; }
-.cal-dur { font-family:'DM Mono',monospace; font-size:10px; font-weight:700; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.cal-dur { font-family:'DM Mono',monospace; font-size:9px; font-weight:700; white-space:nowrap; overflow:hidden; text-overflow:clip; display:block; max-width:100%; }
 .cal-cell.good .cal-dur    { color:#2A6E48; }
 .cal-cell.warning .cal-dur { color:#7A5010; }
 .cal-cell.danger .cal-dur  { color:#8A3028; }
