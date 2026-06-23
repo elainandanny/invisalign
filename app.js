@@ -917,14 +917,12 @@ function logSessionRowHTML(s){
       <span class="log-date">${s.date_est||'—'}</span>
       <span class="log-time">${s.time_est||'—'}</span>
     </div>
-    <div class="log-col-meal">
-      ${s._offline?'<span class="offline-pill" style="font-size:10px">sync</span>':(s.meal_tag
-        ?`<button class="meal-pill meal-pill-btn" onclick="app.openEditMeal('${s.id}','${s.meal_tag}')">${s.meal_tag} ✎</button>`
-        :`<button class="meal-pill-empty" onclick="app.openEditMeal('${s.id}','')">+ meal</button>`)}
-    </div>
-    <div class="log-col-tray"><span class="tray-pill">T${s.tray_number}</span></div>
-    <div class="log-col-dur"><span class="log-duration" style="color:${statusColor(s.duration_seconds)}">${fmtDur(s.duration_seconds)}</span></div>
-    <div class="log-col-del">${!s._offline?`<button class="delete-btn" onclick="app.askDelete('${s.id}','${s.date_est}')">✕</button>`:'<span style="color:var(--butter);font-size:12px">⟳</span>'}</div>
+    ${s._offline?'<span class="offline-pill" style="font-size:10px;flex-shrink:0">sync</span>':(s.meal_tag
+      ?`<button class="meal-pill meal-pill-btn" onclick="app.openEditMeal('${s.id}','${s.meal_tag}')">${s.meal_tag} ✎</button>`
+      :`<button class="meal-pill-empty" onclick="app.openEditMeal('${s.id}','')">+ meal</button>`)}
+    <span class="tray-pill" style="flex-shrink:0">T${s.tray_number}</span>
+    <span class="log-duration" style="color:${statusColor(s.duration_seconds)};flex-shrink:0">${fmtDur(s.duration_seconds)}</span>
+    ${!s._offline?`<button class="delete-btn" style="flex-shrink:0" onclick="app.askDelete('${s.id}','${s.date_est}')">✕</button>`:'<span style="color:var(--butter);flex-shrink:0">⟳</span>'}
   </div>`;
 }
 
