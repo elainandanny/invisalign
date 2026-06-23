@@ -613,49 +613,16 @@ function trayProgressCardHTML(){
   const overall = overallProgress();
   const trayInfo = currentTrayInfo();
   const hasSchedule = Object.keys(state.traySchedule).length > 0;
-  const C28 = 2 * Math.PI * 28;
 
-  if (trayInfo && overall) {
-    return `<div class="card" id="tray-progress-card">
-      <div class="section-title">Tray Progress</div>
-      <div class="dual-rings">
-        <!-- Current tray ring -->
-        <div class="ring-block">
-          <div class="ring-block-label">Tray #${state.currentTray}</div>
-          <div style="position:relative;display:inline-flex;align-items:center;justify-content:center;">
-            <svg width="80" height="80" viewBox="0 0 80 80" style="transform:rotate(-90deg)">
-              <circle cx="40" cy="40" r="28" fill="none" stroke="var(--bg-3)" stroke-width="7"/>
-              <circle cx="40" cy="40" r="28" fill="none" stroke="var(--lavender)" stroke-width="7" stroke-linecap="round"
-                stroke-dasharray="${C28}" stroke-dashoffset="${C28*(1-trayInfo.pct/100)}"/>
-            </svg>
-            <div class="tray-pct">${trayInfo.pct}%</div>
-          </div>
-          <div class="ring-block-sub">Day ${trayInfo.daysOn} of ${trayInfo.daysToWear}</div>
-          <div class="ring-block-sub" style="color:${trayInfo.daysLeft<=2?'var(--peach)':trayInfo.daysLeft<=4?'var(--butter)':'var(--sage)'};font-weight:600">${trayInfo.daysLeft}d left</div>
-          <div class="ring-block-sub">Change ${new Date(trayInfo.endDate+'T12:00:00').toLocaleDateString('en-US',{month:'short',day:'numeric'})}</div>
-          <button class="tray-edit-btn" onclick="app.openTrayScheduleModal(${state.currentTray})">Edit</button>
-        </div>
-        <!-- Overall treatment ring -->
-        <div class="ring-block">
-          <div class="ring-block-label">Overall</div>
-          <div style="position:relative;display:inline-flex;align-items:center;justify-content:center;">
-            <svg width="80" height="80" viewBox="0 0 80 80" style="transform:rotate(-90deg)">
-              <circle cx="40" cy="40" r="28" fill="none" stroke="var(--bg-3)" stroke-width="7"/>
-              <circle cx="40" cy="40" r="28" fill="none" stroke="var(--sage)" stroke-width="7" stroke-linecap="round"
-                stroke-dasharray="${C28}" stroke-dashoffset="${C28*(1-overall.pct/100)}"/>
-            </svg>
-            <div class="tray-pct" style="color:var(--sage)">${overall.pct}%</div>
-          </div>
-          <div class="ring-block-sub">Day ${overall.elapsed} of ${overall.totalDays}</div>
-          <div class="ring-block-sub" style="color:var(--sage);font-weight:600">T${state.currentTray} of ${TOTAL_TRAYS}</div>
-          <div class="ring-block-sub">Done ~${new Date(overall.endDate+'T12:00:00').toLocaleDateString('en-US',{month:'short',year:'numeric'})}</div>
-        </div>
-      </div>
-    </div>`;
-  }
-
-  // Fallback: tray info available but no overall (no tray 1 start date)
   if (trayInfo) {
+    const overallHTML = overall ? `
+      <div style="margin-top:14px;padding-top:14px;border-top:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;">
+        <div style="font-size:12px;color:var(--text-3);">Overall treatment</div>
+        <div style="display:flex;align-items:center;gap:12px;">
+          <span style="font-family:'DM Mono',monospace;font-size:18px;font-weight:700;color:var(--sage)">${overall.pct}%</span>
+          <span style="font-size:12px;color:var(--text-3);">Done ~${new Date(overall.endDate+'T12:00:00').toLocaleDateString('en-US',{month:'short',year:'numeric'})}</span>
+        </div>
+      </div>` : '';
     return `<div class="card" id="tray-progress-card">
       <div class="section-title">Tray Progress</div>
       <div class="tray-card">
@@ -675,6 +642,7 @@ function trayProgressCardHTML(){
           <button class="tray-edit-btn" onclick="app.openTrayScheduleModal(${state.currentTray})">Edit schedule</button>
         </div>
       </div>
+      ${overallHTML}
     </div>`;
   }
 
@@ -824,7 +792,6 @@ const NAV=[
   {id:'progress', label:'Progress', icon:'◎'},
   {id:'graphs',   label:'Graphs',   icon:'⌇'},
   {id:'calendar', label:'Calendar', icon:'▦'},
-  {id:'settings', label:'Settings', icon:'⚙'},
 ];
 
 function sidebarHTML(){return `<aside class="sidebar">
@@ -1348,4 +1315,79 @@ window.app.installPWA = async () => {
 window.addEventListener('appinstalled', () => {
   document.getElementById('install-banner')?.remove();
   deferredInstallPrompt = null;
-});
+});function renderSettings(){
+  const overall = overallProgress();
+  const trayGrid = Array.from({length:TOTAL_TRAYS},(_,i)=>i+1).map(t=>{
+    const info = state.traySchedule[t];
+    const isCurrent = t === state.currentTray;
+    const isDone = t < state.currentTray;
+    const bg = isCurrent ? 'var(--sky-lt)' : isDone ? 'var(--sage-lt)' : 'var(--bg-3)';
+    const border = isCurrent ? 'var(--sky)' : isDone ? 'var(--sage)' : 'var(--border)';
+    const color = isCurrent ? 'var(--sky)' : isDone ? 'var(--sage)' : 'var(--text)';
+    return `<div onclick="app.openTrayScheduleModal(${t})"
+      style="padding:8px 4px;background:${bg};border:1px solid ${border};
+      border-radius:var(--radius-sm);text-align:center;cursor:pointer;">
+      <div style="font-family:'DM Mono',monospace;font-size:12px;font-weight:700;color:${color}">${t}</div>
+      <div style="font-size:9px;color:var(--text-3)">${info ? info.days_to_wear+'d' : '—'}</div>
+    </div>`;
+  }).join('');
+
+  const paletteCards = Object.entries(PALETTES).map(([key,p])=>{
+    const swatches = p.colors.map(c=>`<div class="palette-swatch" style="background:${c}"></div>`).join('');
+    return `<div class="palette-card ${state.palette===key?'active':''}" onclick="app.setPalette('${key}')">
+      <div class="palette-swatches">${swatches}</div>
+      <div class="palette-name">${p.name}</div>
+    </div>`;
+  }).join('');
+
+  document.querySelector('.main').innerHTML = `
+    <div class="page-title">Settings</div>
+
+    <div class="card" style="margin-bottom:16px;">
+      <div class="section-title">Appearance</div>
+      <div class="settings-row">
+        <div><div class="settings-row-label">Dark Mode</div><div class="settings-row-sub">Switch to a dark background</div></div>
+        <label class="toggle">
+          <input type="checkbox" ${state.darkMode?'checked':''} onchange="app.toggleDark(this.checked)"/>
+          <span class="toggle-slider"></span>
+        </label>
+      </div>
+    </div>
+
+    <div class="card" style="margin-bottom:16px;">
+      <div class="section-title">Color Palette</div>
+      <div class="palette-grid">${paletteCards}</div>
+    </div>
+
+    <div class="card" style="margin-bottom:16px;">
+      <div class="section-title">Treatment</div>
+      <div class="settings-row">
+        <div><div class="settings-row-label">Total Trays</div><div class="settings-row-sub">Currently ${TOTAL_TRAYS} trays</div></div>
+        <div style="display:flex;gap:8px;align-items:center;">
+          <input class="settings-num" type="number" id="setting-total-trays" min="1" max="99" value="${TOTAL_TRAYS}"/>
+          <button class="settings-save-btn" onclick="app.saveTotalTrays()">Save</button>
+        </div>
+      </div>
+      <div class="settings-row">
+        <div><div class="settings-row-label">Daily Wear Limit</div><div class="settings-row-sub">Max time out per day</div></div>
+        <div style="display:flex;gap:8px;align-items:center;">
+          <input class="settings-num" type="number" id="setting-wear-limit" min="1" max="6" value="${MAX_OUT_SECONDS/3600}" step="0.5" style="width:80px"/>
+          <button class="settings-save-btn" onclick="app.saveWearLimit()">Save</button>
+        </div>
+      </div>
+      ${overall ? `<div class="settings-row">
+        <div><div class="settings-row-label">Overall Progress</div>
+        <div class="settings-row-sub">Day ${overall.elapsed} of ${overall.totalDays} · Est. done ${new Date(overall.endDate+'T12:00:00').toLocaleDateString('en-US',{month:'long',year:'numeric'})}</div></div>
+        <div style="font-family:'DM Mono',monospace;font-size:18px;font-weight:700;color:var(--sage)">${overall.pct}%</div>
+      </div>` : ''}
+    </div>
+
+    <div class="card">
+      <div class="section-title">Tray Schedule</div>
+      <p style="font-size:13px;color:var(--text-3);margin-bottom:14px;">Tap any tray to edit. Green = done, blue = current.</p>
+      <button class="sw-btn sw-btn-quick" style="width:100%;padding:9px;margin-bottom:12px;" onclick="app.openSetup()">Auto-generate All ${TOTAL_TRAYS} Trays</button>
+      <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(52px,1fr));gap:6px;">${trayGrid}</div>
+    </div>`;
+}
+
+
