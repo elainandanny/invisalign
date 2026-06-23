@@ -913,12 +913,19 @@ function applyLogFilter() {
 
 function logSessionRowHTML(s){
   return `<div class="log-session-row ${s._offline?'log-session-offline':''}">
-    <span class="log-datetime">${s.date_est||'—'} <span class="log-time">${s.time_est||'—'}</span></span>
-    ${s._offline?'<span class="offline-pill">sync</span>':(s.meal_tag
-      ?`<button class="meal-pill meal-pill-btn" onclick="app.openEditMeal('${s.id}','${s.meal_tag}')">${s.meal_tag} ✎</button>`
-      :`<button class="meal-pill-empty" onclick="app.openEditMeal('${s.id}','')">+ meal</button>`)}
-    <span class="tray-pill">T${s.tray_number}</span>
-    <span class="log-duration" style="color:${statusColor(s.duration_seconds)}">${fmtDur(s.duration_seconds)}</span>
+    <div class="log-col-date">
+      <span class="log-date">${s.date_est||'—'}</span>
+      <span class="log-time">${s.time_est||'—'}</span>
+    </div>
+    <div class="log-col-tags">
+      ${s._offline?'<span class="offline-pill">sync</span>':(s.meal_tag
+        ?`<button class="meal-pill meal-pill-btn" onclick="app.openEditMeal('${s.id}','${s.meal_tag}')">${s.meal_tag} ✎</button>`
+        :`<button class="meal-pill-empty" onclick="app.openEditMeal('${s.id}','')">+ meal</button>`)}
+      <span class="tray-pill">T${s.tray_number}</span>
+    </div>
+    <div class="log-col-dur">
+      <span class="log-duration" style="color:${statusColor(s.duration_seconds)}">${fmtDur(s.duration_seconds)}</span>
+    </div>
     ${!s._offline?`<button class="delete-btn" onclick="app.askDelete('${s.id}','${s.date_est}')">✕</button>`:'<span style="color:var(--butter)">⟳</span>'}
   </div>`;
 }
