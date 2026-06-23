@@ -68,14 +68,15 @@ function remColor(rem) {
 
 // ── Palettes ──
 const PALETTES = {
-  default:     { name:'Pastel',         colors:['#6BBF8E','#5BAFD6','#9B8EC4','#D4A843','#D97B6C'] },
-  tiana:       { name:'Tiana',          colors:['#5B9B6B','#4A8FA8','#8B7BAA','#C9973A','#C8694A'] },
-  ariel:       { name:'Ariel',          colors:['#3AADA8','#4A7FC1','#8B6BAA','#D4854A','#C84A5A'] },
-  cinderella:  { name:'Cinderella',     colors:['#6AA8C8','#4878B0','#9888C0','#B8A878','#C87888'] },
-  rapunzel:    { name:'Rapunzel',       colors:['#8BAA5B','#9870C0','#C0905A','#D4B83A','#C05870'] },
-  moana:       { name:'Moana',          colors:['#3A9BA8','#2878A8','#C0784A','#D4A030','#D06040'] },
-  elsa:        { name:'Elsa',           colors:['#70B8D8','#4888C0','#9098D0','#A8C8E0','#C080B0'] },
-  cruise:      { name:'Disney Cruise',  colors:['#B33A3A','#1B3D5C','#1B3D5C','#F2C94C','#B33A3A'] },
+  // Colors shown in order: sky, sage, lavender, butter, peach
+  default:     { name:'Pastel',         colors:['#5BAFD6','#6BBF8E','#9B8EC4','#D4A843','#D97B6C'] },
+  tiana:       { name:'Tiana',          colors:['#3D7A5A','#7BB860','#C9973A','#D4A84A','#C86040'] },
+  ariel:       { name:'Ariel',          colors:['#3AADA8','#5BAA7A','#8B6BAA','#D4854A','#C84A5A'] },
+  cinderella:  { name:'Cinderella',     colors:['#4878B0','#6AA8C8','#9888C0','#B8A060','#C07888'] },
+  rapunzel:    { name:'Rapunzel',       colors:['#9870C0','#8BAA5B','#D4B83A','#C0905A','#C05870'] },
+  moana:       { name:'Moana',          colors:['#2878A8','#3A9BA8','#C0784A','#D4A030','#D06040'] },
+  elsa:        { name:'Elsa',           colors:['#4888C0','#70B8D8','#9098D0','#88B0D0','#C080B0'] },
+  cruise:      { name:'Disney Cruise',  colors:['#1B3D5C','#4A8FA8','#F2C94C','#D4900A','#B33A3A'] },
 };
 
 function applyTheme() {
@@ -616,11 +617,13 @@ function trayProgressCardHTML(){
 
   if (trayInfo) {
     const overallHTML = overall ? `
-      <div style="margin-top:14px;padding-top:14px;border-top:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;">
-        <div style="font-size:12px;color:var(--text-3);">Overall treatment</div>
-        <div style="display:flex;align-items:center;gap:12px;">
-          <span style="font-family:'DM Mono',monospace;font-size:18px;font-weight:700;color:var(--sage)">${overall.pct}%</span>
-          <span style="font-size:12px;color:var(--text-3);">Done ~${new Date(overall.endDate+'T12:00:00').toLocaleDateString('en-US',{month:'short',year:'numeric'})}</span>
+      <div style="margin-top:14px;padding-top:14px;border-top:1px solid var(--border);">
+        <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:6px;">
+          <span style="font-family:'DM Mono',monospace;font-size:16px;font-weight:700;color:var(--sage)">${overall.pct}%</span>
+          <span style="font-size:11px;color:var(--text-3);">Done ~${new Date(overall.endDate+'T12:00:00').toLocaleDateString('en-US',{month:'short',year:'numeric'})}</span>
+        </div>
+        <div style="height:8px;background:var(--bg-3);border-radius:4px;overflow:hidden;">
+          <div style="height:100%;width:${overall.pct}%;background:var(--sage);border-radius:4px;transition:width 0.6s ease;"></div>
         </div>
       </div>` : '';
     return `<div class="card" id="tray-progress-card">
@@ -1098,6 +1101,27 @@ function renderGraphs(){
     </div>`;
   drawCharts();
 }
+function getPaletteColors() {
+  // Read current CSS variable values so charts always match the active palette
+  const s = getComputedStyle(document.body);
+  const get = v => s.getPropertyValue(v).trim();
+  return {
+    sage:     get('--sage')     || '#6BBF8E',
+    sky:      get('--sky')      || '#5BAFD6',
+    lavender: get('--lavender') || '#9B8EC4',
+    butter:   get('--butter')   || '#D4A843',
+    peach:    get('--peach')    || '#D97B6C',
+    rose:     get('--rose')     || '#C4728A',
+  };
+}
+
+function hexToRgba(hex, alpha) {
+  const r = parseInt(hex.slice(1,3),16);
+  const g = parseInt(hex.slice(3,5),16);
+  const b = parseInt(hex.slice(5,7),16);
+  return `rgba(${r},${g},${b},${alpha})`;
+}
+
 function drawCharts(){
   const allSessions=[...state.sessions,...getOfflineQueue()];
   const last30={};
@@ -1384,7 +1408,7 @@ window.addEventListener('appinstalled', () => {
 
     <div class="card">
       <div class="section-title">Tray Schedule</div>
-      <p style="font-size:13px;color:var(--text-3);margin-bottom:14px;">Tap any tray to edit. Green = done, blue = current.</p>
+      
       <button class="sw-btn sw-btn-quick" style="width:100%;padding:9px;margin-bottom:12px;" onclick="app.openSetup()">Auto-generate All ${TOTAL_TRAYS} Trays</button>
       <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(52px,1fr));gap:6px;">${trayGrid}</div>
     </div>`;

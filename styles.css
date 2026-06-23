@@ -52,65 +52,72 @@
 
 /* ── Tiana palette ── */
 [data-palette="tiana"] {
-  --sage:     #5B9B6B; --sage-lt: #C8E6D0; --sage-dim: rgba(91,155,107,0.15);
-  --sky:      #4A8FA8; --sky-lt:  #C5DFE8; --sky-dim:  rgba(74,143,168,0.15); --sky-dim2: rgba(74,143,168,0.08);
-  --lavender: #8B7BAA; --lav-lt:  #D8D0EC; --lav-dim:  rgba(139,123,170,0.15);
-  --butter:   #C9973A; --but-lt:  #F0E0B8; --but-dim:  rgba(201,151,58,0.15);
-  --peach:    #C8694A; --pch-lt:  #F0CFC5; --pch-dim:  rgba(200,105,74,0.15);
+  --sky:      #3D7A5A;   --sky-lt:  #C0DDD0;  --sky-dim:  rgba(61,122,90,0.15); --sky-dim2: rgba(61,122,90,0.07);
+  --sage:     #7BB860;  --sage-lt: #D4EEC8; --sage-dim: rgba(123,184,96,0.15);
+  --lavender: #C9973A;   --lav-lt:  #F0E0B0;  --lav-dim:  rgba(201,151,58,0.15);
+  --butter:   #D4A84A;   --but-lt:  #F5E8C0;  --but-dim:  rgba(212,168,74,0.15);
+  --peach:    #C86040;   --pch-lt:  #F5CEB8;  --pch-dim:  rgba(200,96,64,0.15);
+  --rose:     #9B7BAA;
 }
 
 /* ── Ariel palette ── */
 [data-palette="ariel"] {
-  --sage:     #3AADA8; --sage-lt: #B8E4E2; --sage-dim: rgba(58,173,168,0.15);
-  --sky:      #4A7FC1; --sky-lt:  #C2D8F0; --sky-dim:  rgba(74,127,193,0.15); --sky-dim2: rgba(74,127,193,0.08);
-  --lavender: #8B6BAA; --lav-lt:  #D8CCE8; --lav-dim:  rgba(139,107,170,0.15);
-  --butter:   #D4854A; --but-lt:  #F5D8B8; --but-dim:  rgba(212,133,74,0.15);
-  --peach:    #C84A5A; --pch-lt:  #F0C0C5; --pch-dim:  rgba(200,74,90,0.15);
+  --sky:      #3AADA8;   --sky-lt:  #B8E4E2;  --sky-dim:  rgba(58,173,168,0.15); --sky-dim2: rgba(58,173,168,0.07);
+  --sage:     #5BAA7A;  --sage-lt: #C8E8D8; --sage-dim: rgba(91,170,122,0.15);
+  --lavender: #8B6BAA;   --lav-lt:  #D8CCE8;  --lav-dim:  rgba(139,107,170,0.15);
+  --butter:   #D4854A;   --but-lt:  #F5D8B8;  --but-dim:  rgba(212,133,74,0.15);
+  --peach:    #C84A5A;   --pch-lt:  #F0C0C5;  --pch-dim:  rgba(200,74,90,0.15);
+  --rose:     #E87A8A;
 }
 
 /* ── Cinderella palette ── */
 [data-palette="cinderella"] {
-  --sage:     #6AA8C8; --sage-lt: #CCE5F2; --sage-dim: rgba(106,168,200,0.15);
-  --sky:      #4878B0; --sky-lt:  #C0D4EC; --sky-dim:  rgba(72,120,176,0.15); --sky-dim2: rgba(72,120,176,0.08);
-  --lavender: #9888C0; --lav-lt:  #DDD8EF; --lav-dim:  rgba(152,136,192,0.15);
-  --butter:   #B8A878; --but-lt:  #EDE5CC; --but-dim:  rgba(184,168,120,0.15);
-  --peach:    #C87888; --pch-lt:  #F0CCD4; --pch-dim:  rgba(200,120,136,0.15);
+  --sky:      #4878B0;   --sky-lt:  #C0D4EC;  --sky-dim:  rgba(72,120,176,0.15); --sky-dim2: rgba(72,120,176,0.07);
+  --sage:     #6AA8C8;  --sage-lt: #CCE5F2; --sage-dim: rgba(106,168,200,0.15);
+  --lavender: #9888C0;   --lav-lt:  #DDD8EF;  --lav-dim:  rgba(152,136,192,0.15);
+  --butter:   #B8A060;   --but-lt:  #EDE0C0;  --but-dim:  rgba(184,160,96,0.15);
+  --peach:    #C07888;   --pch-lt:  #F0CCD4;  --pch-dim:  rgba(192,120,136,0.15);
+  --rose:     #E8B8C8;
 }
 
 /* ── Rapunzel palette ── */
 [data-palette="rapunzel"] {
-  --sage:     #8BAA5B; --sage-lt: #D8ECC0; --sage-dim: rgba(139,170,91,0.15);
-  --sky:      #9870C0; --sky-lt:  #DCCCEA; --sky-dim:  rgba(152,112,192,0.15); --sky-dim2: rgba(152,112,192,0.08);
-  --lavender: #C0905A; --lav-lt:  #EED8C0; --lav-dim:  rgba(192,144,90,0.15);
-  --butter:   #D4B83A; --but-lt:  #F5E8A8; --but-dim:  rgba(212,184,58,0.15);
-  --peach:    #C05870; --pch-lt:  #ECC5CE; --pch-dim:  rgba(192,88,112,0.15);
+  --sky:      #9870C0;   --sky-lt:  #DCCCEA;  --sky-dim:  rgba(152,112,192,0.15); --sky-dim2: rgba(152,112,192,0.07);
+  --sage:     #8BAA5B;  --sage-lt: #D8ECC0; --sage-dim: rgba(139,170,91,0.15);
+  --lavender: #D4B83A;   --lav-lt:  #F5E8A8;  --lav-dim:  rgba(212,184,58,0.15);
+  --butter:   #C0905A;   --but-lt:  #EED8C0;  --but-dim:  rgba(192,144,90,0.15);
+  --peach:    #C05870;   --pch-lt:  #ECC5CE;  --pch-dim:  rgba(192,88,112,0.15);
+  --rose:     #E888A0;
 }
 
 /* ── Moana palette ── */
 [data-palette="moana"] {
-  --sage:     #3A9BA8; --sage-lt: #B5E0E5; --sage-dim: rgba(58,155,168,0.15);
-  --sky:      #2878A8; --sky-lt:  #B0D4EC; --sky-dim:  rgba(40,120,168,0.15); --sky-dim2: rgba(40,120,168,0.08);
-  --lavender: #C0784A; --lav-lt:  #F0D0B8; --lav-dim:  rgba(192,120,74,0.15);
-  --butter:   #D4A030; --but-lt:  #F5E0A0; --but-dim:  rgba(212,160,48,0.15);
-  --peach:    #D06040; --pch-lt:  #F5C8B5; --pch-dim:  rgba(208,96,64,0.15);
+  --sky:      #2878A8;   --sky-lt:  #B0D4EC;  --sky-dim:  rgba(40,120,168,0.15); --sky-dim2: rgba(40,120,168,0.07);
+  --sage:     #3A9BA8;  --sage-lt: #B5E0E5; --sage-dim: rgba(58,155,168,0.15);
+  --lavender: #C0784A;   --lav-lt:  #F0D0B8;  --lav-dim:  rgba(192,120,74,0.15);
+  --butter:   #D4A030;   --but-lt:  #F5E0A0;  --but-dim:  rgba(212,160,48,0.15);
+  --peach:    #D06040;   --pch-lt:  #F5C8B5;  --pch-dim:  rgba(208,96,64,0.15);
+  --rose:     #E87060;
 }
 
 /* ── Elsa palette ── */
 [data-palette="elsa"] {
-  --sage:     #70B8D8; --sage-lt: #C8E8F5; --sage-dim: rgba(112,184,216,0.15);
-  --sky:      #4888C0; --sky-lt:  #C0D8EE; --sky-dim:  rgba(72,136,192,0.15); --sky-dim2: rgba(72,136,192,0.08);
-  --lavender: #9098D0; --lav-lt:  #D0D5F0; --lav-dim:  rgba(144,152,208,0.15);
-  --butter:   #A8C8E0; --but-lt:  #D8EDF8; --but-dim:  rgba(168,200,224,0.15);
-  --peach:    #C080B0; --pch-lt:  #EED0E8; --pch-dim:  rgba(192,128,176,0.15);
+  --sky:      #4888C0;   --sky-lt:  #C0D8EE;  --sky-dim:  rgba(72,136,192,0.15); --sky-dim2: rgba(72,136,192,0.07);
+  --sage:     #70B8D8;  --sage-lt: #C8E8F5; --sage-dim: rgba(112,184,216,0.15);
+  --lavender: #9098D0;   --lav-lt:  #D0D5F0;  --lav-dim:  rgba(144,152,208,0.15);
+  --butter:   #88B0D0;   --but-lt:  #D0E5F5;  --but-dim:  rgba(136,176,208,0.15);
+  --peach:    #C080B0;   --pch-lt:  #EED0E8;  --pch-dim:  rgba(192,128,176,0.15);
+  --rose:     #D8A0C8;
 }
 
 /* ── Disney Cruise palette ── */
 [data-palette="cruise"] {
-  --sage:     #B33A3A; --sage-lt: #F0C0C0; --sage-dim: rgba(179,58,58,0.15);
-  --sky:      #1B3D5C; --sky-lt:  #B0C8DC; --sky-dim:  rgba(27,61,92,0.15); --sky-dim2: rgba(27,61,92,0.08);
-  --lavender: #1B3D5C; --lav-lt:  #B0C8DC; --lav-dim:  rgba(27,61,92,0.15);
-  --butter:   #F2C94C; --but-lt:  #FDF0C0; --but-dim:  rgba(242,201,76,0.15);
+  --sky:      #1B3D5C; --sky-lt:  #C0D4E4; --sky-dim:  rgba(27,61,92,0.15); --sky-dim2: rgba(27,61,92,0.06);
+  --sage:     #4A8FA8; --sage-lt: #C0DCE8; --sage-dim: rgba(74,143,168,0.15);
+  --lavender: #F2C94C; --lav-lt:  #FDF0C0; --lav-dim:  rgba(242,201,76,0.15);
+  --butter:   #D4900A; --but-lt:  #F5E0A5; --but-dim:  rgba(212,144,10,0.15);
   --peach:    #B33A3A; --pch-lt:  #F0C0C0; --pch-dim:  rgba(179,58,58,0.15);
+  --rose:     #E8E0D0;
 }
 
 html { font-size: 16px; }
