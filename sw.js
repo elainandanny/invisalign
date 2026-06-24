@@ -1,7 +1,7 @@
 // ── Invisalign Tracker — Service Worker ──
 // Cache name uses build date — update this date when you push new files
 // Format: YYYY-MM-DD  (just change the date, no need to increment numbers)
-const CACHE_NAME = 'invisalign-2026-06-25k';
+const CACHE_NAME = 'invisalign-2026-06-25l';
 
 const STATIC_ASSETS = [
   './',

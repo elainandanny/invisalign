@@ -803,13 +803,16 @@ function openQuickAddModal(){
   openModal(`
     <h3>Add Past Session</h3>
     <p style="font-size:13px;color:var(--text-2);margin-bottom:16px;">Log a session you forgot to track.</p>
-    <div class="form-group"><label class="form-label">Date</label><input class="form-input" type="date" id="qa-date" value="${today}" max="${today}"/></div>
-    <div class="form-row">
-      <div class="form-group"><label class="form-label">Start time</label><input class="form-input" type="time" id="qa-start" value="12:00"/></div>
-      <div class="form-group"><label class="form-label">End time</label><input class="form-input" type="time" id="qa-end" value="12:30"/></div>
+    <div class="form-group"><label class="form-label">Date</label>
+      <input class="form-input" type="date" id="qa-date" value="${today}" max="${today}" style="width:100%;min-width:0;box-sizing:border-box;"/></div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;width:100%;box-sizing:border-box;">
+      <div class="form-group" style="min-width:0;"><label class="form-label">Start time</label>
+        <input class="form-input" type="time" id="qa-start" value="12:00" style="width:100%;min-width:0;box-sizing:border-box;"/></div>
+      <div class="form-group" style="min-width:0;"><label class="form-label">End time</label>
+        <input class="form-input" type="time" id="qa-end" value="12:30" style="width:100%;min-width:0;box-sizing:border-box;"/></div>
     </div>
     <div class="form-group"><label class="form-label">Meal (optional)</label>
-      <select class="form-input" id="qa-meal">
+      <select class="form-input" id="qa-meal" style="width:100%;box-sizing:border-box;">
         <option value="">None</option><option value="breakfast">Breakfast</option>
         <option value="lunch">Lunch</option><option value="dinner">Dinner</option><option value="other">Other</option>
       </select></div>
@@ -1171,7 +1174,6 @@ function allTimeHTML(){
 function mealAvgHTML(){
   const allSessions=[...state.sessions,...getOfflineQueue()];
   const tags=['breakfast','lunch','dinner','other'];
-  const tagEmoji={'breakfast':'🌅','lunch':'☀️','dinner':'🌙','other':'⋯'};
   const counts={}, totals={};
   tags.forEach(t=>{ counts[t]=0; totals[t]=0; });
   allSessions.forEach(s=>{
@@ -1183,17 +1185,10 @@ function mealAvgHTML(){
 
   const rows = tags.filter(t=>counts[t]>0).map(t=>{
     const avg = Math.round(totals[t]/counts[t]);
-    const pct = Math.min(100, Math.round((avg / MAX_OUT_SECONDS) * 100));
     const col = avg >= WARN_SECONDS ? 'var(--peach)' : avg >= MAX_OUT_SECONDS ? 'var(--butter)' : 'var(--sage)';
-    return `<div style="margin-bottom:10px;">
-      <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:4px;">
-        <span style="font-size:12px;color:var(--text-2);">${tagEmoji[t]} ${t.charAt(0).toUpperCase()+t.slice(1)}</span>
-        <span style="font-family:'DM Mono',monospace;font-size:13px;font-weight:700;color:${col}">${fmtDur(avg)}</span>
-      </div>
-      <div style="height:5px;background:var(--bg-3);border-radius:3px;overflow:hidden;">
-        <div style="height:100%;width:${pct}%;background:${col};border-radius:3px;transition:width 0.5s ease;"></div>
-      </div>
-      <div style="font-size:10px;color:var(--text-3);margin-top:2px;">${counts[t]} session${counts[t]!==1?'s':''}</div>
+    return `<div class="insight-row">
+      <span class="insight-key">${t.charAt(0).toUpperCase()+t.slice(1)}</span>
+      <span class="insight-val" style="color:${col}">${fmtDur(avg)}</span>
     </div>`;
   }).join('');
 
