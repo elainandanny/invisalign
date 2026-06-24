@@ -58,6 +58,13 @@ const state = {
 
 // ── Helpers ──
 const fmt = sec => [Math.floor(sec/3600), Math.floor((sec%3600)/60), sec%60].map(n=>String(n).padStart(2,'0')).join(':');
+// Compact format for calendar cells: 2h46 or 49m
+function fmtCal(sec) {
+  const h = Math.floor(sec/3600);
+  const m = Math.floor((sec%3600)/60);
+  if (h > 0) return m > 0 ? `${h}h${m}` : `${h}h`;
+  return `${m}m`;
+}
 function fmtDur(sec) {
   const h=Math.floor(sec/3600), m=Math.floor((sec%3600)/60);
   if(h>0&&m>0) return `${h}h ${m}m`; if(h>0) return `${h}h`; return `${m}m`;
@@ -1131,6 +1138,7 @@ function renderProgress(){
           :'<p style="font-size:13px;color:var(--text-3)">Need more sessions.</p>'}
       </div>
       <div class="card">${allTimeHTML()}</div>
+      <div class="card">${mealAvgHTML()}</div>
       <div class="card span-full">
         <div class="section-title">30-day Compliance</div>
         <div class="chart-wrap" style="height:150px;"><canvas id="chart-comp"></canvas></div>
@@ -1160,6 +1168,38 @@ function allTimeHTML(){
     <div class="insight-row"><span class="insight-key">Avg per session</span><span class="insight-val">${avg?fmtDur(avg):'—'}</span></div>
     <div class="insight-row"><span class="insight-key">Best day</span><span class="insight-val c-sage">${best?fmtDur(best):'—'}</span></div>`;
 }
+function mealAvgHTML(){
+  const allSessions=[...state.sessions,...getOfflineQueue()];
+  const tags=['breakfast','lunch','dinner','other'];
+  const tagEmoji={'breakfast':'🌅','lunch':'☀️','dinner':'🌙','other':'⋯'};
+  const counts={}, totals={};
+  tags.forEach(t=>{ counts[t]=0; totals[t]=0; });
+  allSessions.forEach(s=>{
+    const t = s.meal_tag && tags.includes(s.meal_tag) ? s.meal_tag : null;
+    if(t){ counts[t]++; totals[t]+=s.duration_seconds; }
+  });
+  const hasData = tags.some(t=>counts[t]>0);
+  if(!hasData) return `<div class="section-title">Avg by Meal</div><p style="font-size:13px;color:var(--text-3)">Tag sessions to see averages.</p>`;
+
+  const rows = tags.filter(t=>counts[t]>0).map(t=>{
+    const avg = Math.round(totals[t]/counts[t]);
+    const pct = Math.min(100, Math.round((avg / MAX_OUT_SECONDS) * 100));
+    const col = avg >= WARN_SECONDS ? 'var(--peach)' : avg >= MAX_OUT_SECONDS ? 'var(--butter)' : 'var(--sage)';
+    return `<div style="margin-bottom:10px;">
+      <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:4px;">
+        <span style="font-size:12px;color:var(--text-2);">${tagEmoji[t]} ${t.charAt(0).toUpperCase()+t.slice(1)}</span>
+        <span style="font-family:'DM Mono',monospace;font-size:13px;font-weight:700;color:${col}">${fmtDur(avg)}</span>
+      </div>
+      <div style="height:5px;background:var(--bg-3);border-radius:3px;overflow:hidden;">
+        <div style="height:100%;width:${pct}%;background:${col};border-radius:3px;transition:width 0.5s ease;"></div>
+      </div>
+      <div style="font-size:10px;color:var(--text-3);margin-top:2px;">${counts[t]} session${counts[t]!==1?'s':''}</div>
+    </div>`;
+  }).join('');
+
+  return `<div class="section-title">Avg by Meal</div>${rows}`;
+}
+
 function drawCompChart(){
   const byDate={};
   const allSessions=[...state.sessions,...getOfflineQueue()];
@@ -1260,7 +1300,7 @@ function renderCalendar(){
     // dc class goes on the cell itself for full background color
     cells+=`<div class="cal-cell ${ds===todayStr?'today':''} ${dc} ${note?'has-note':''}" onclick="app.openNote('${ds}')">
       <div class="cal-date">${d}</div>
-      ${sec?`<div class="cal-dur">${fmtDur(sec)}</div>`:''}
+      ${sec?`<div class="cal-dur">${fmtCal(sec)}</div>`:''}
     </div>`;
   }
   document.querySelector('.main').innerHTML=`
