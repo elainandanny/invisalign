@@ -177,10 +177,17 @@ body {
 .mobile-nav-item.active { color:var(--sky); border-top-color:var(--sky); font-weight:500; }
 
 /* ── Modals ── */
-.modal-overlay { position:fixed; inset:0; background:rgba(0,0,0,0.35); z-index:200; display:flex; align-items:flex-end; justify-content:center; }
+.modal-overlay { position:fixed; inset:0; background:rgba(0,0,0,0.35); z-index:200; display:flex; align-items:flex-end; justify-content:center; padding:0 16px; box-sizing:border-box; }
 .modal-sheet { background:var(--bg-2); border:1px solid var(--border); border-radius:var(--radius) var(--radius) 0 0; padding:28px 24px; width:100%; max-width:480px; max-height:90vh; overflow-y:auto; overflow-x:hidden; box-sizing:border-box; box-shadow:0 -8px 32px rgba(0,0,0,0.12); }
-.modal-sheet .form-input, .modal-sheet .form-row { max-width:100%; }
+.modal-sheet .form-input, .modal-sheet .form-row { max-width:100%; box-sizing:border-box; }
 .modal-sheet .modal-row { margin-left:0; margin-right:0; }
+/* Force all inputs inside modal to respect container width */
+.modal-sheet input, .modal-sheet select, .modal-sheet textarea {
+  width:100% !important; max-width:100% !important;
+  box-sizing:border-box !important; min-width:0 !important;
+}
+.modal-sheet .form-row { display:grid; grid-template-columns:1fr 1fr; gap:12px; width:100%; }
+.modal-sheet .form-row input { width:100% !important; }
 .modal-sheet h3 { font-size:16px; font-weight:600; margin-bottom:20px; color:var(--text); }
 .modal-row { display:flex; gap:10px; margin-top:16px; }
 .modal-btn-primary { flex:1; padding:12px; background:var(--sky); color:#fff; border:none; border-radius:var(--radius-sm); font-size:14px; font-weight:700; cursor:pointer; }
@@ -341,7 +348,7 @@ textarea.form-input { resize:vertical; min-height:80px; }
 .cal-month-lbl { font-size:16px; font-weight:600; }
 .cal-grid { display:grid; grid-template-columns:repeat(7,1fr); gap:4px; }
 .cal-day-name { text-align:center; font-size:10px; color:var(--text-3); padding:6px 0; text-transform:uppercase; letter-spacing:0.06em; font-weight:600; }
-.cal-cell { aspect-ratio:1/1; padding:7px; background:var(--bg-3); border:1px solid transparent; border-radius:var(--radius-sm); display:flex; flex-direction:column; gap:2px; cursor:pointer; transition:all 0.2s; overflow:hidden; position:relative; }
+.cal-cell { aspect-ratio:1/1; padding:5px; background:var(--bg-3); border:1px solid transparent; border-radius:var(--radius-sm); display:flex; flex-direction:column; gap:1px; cursor:pointer; transition:all 0.2s; overflow:hidden; position:relative; min-width:0; }
 .cal-cell:hover:not(.empty) { filter:brightness(0.95); }
 .cal-cell.empty { background:transparent; border-color:transparent; cursor:default; }
 .cal-cell.good    { background:var(--sage-lt); border-color:var(--sage); }
@@ -352,11 +359,11 @@ textarea.form-input { resize:vertical; min-height:80px; }
 .cal-cell.today .cal-dur  { color:#2E7AAA !important; }
 .cal-cell.has-note { position:relative; }
 .cal-cell.has-note::after { content:'•'; font-size:10px; color:rgba(0,0,0,0.3); position:absolute; top:5px; right:6px; line-height:1; }
-.cal-date { font-size:10px; color:var(--text-3); font-weight:600; line-height:1.2; }
+.cal-date { font-size:9px; color:var(--text-3); font-weight:600; line-height:1.2; display:block; width:100%; }
 .cal-cell.good .cal-date    { color:var(--sage); font-weight:700; }
 .cal-cell.warning .cal-date { color:var(--butter); font-weight:700; }
 .cal-cell.danger .cal-date  { color:var(--peach); font-weight:700; }
-.cal-dur { font-family:'DM Mono',monospace; font-size:9px; font-weight:700; white-space:nowrap; overflow:hidden; text-overflow:clip; display:block; max-width:100%; }
+.cal-dur { font-family:'DM Mono',monospace; font-size:8px; font-weight:700; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; display:block; width:100%; max-width:100%; line-height:1.2; }
 .cal-cell.good .cal-dur    { color:var(--sage); }
 .cal-cell.warning .cal-dur { color:var(--butter); }
 .cal-cell.danger .cal-dur  { color:var(--peach); }
@@ -438,7 +445,7 @@ textarea.form-input { resize:vertical; min-height:80px; }
   .progress-grid .span-2 { grid-column:1 / -1; }
   .charts-grid { grid-template-columns:1fr; }
   .chart-full { grid-column:1; }
-  .cal-cell { padding:5px; }
+  .cal-cell { padding:4px; }
   .toast { bottom:calc(var(--nav-h) + 10px); width:calc(100% - 32px); white-space:normal; }
   .palette-grid { grid-template-columns:repeat(2,1fr); }
   .dual-rings { gap:12px; }

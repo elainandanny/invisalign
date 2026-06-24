@@ -785,9 +785,7 @@ function openTrayScheduleModal(trayNum){
   openModal(`
     <h3>Tray #${t} Schedule</h3>
     <div class="form-group"><label class="form-label">Start date</label>
-      <div style="overflow-x:auto;-webkit-overflow-scrolling:touch;border-radius:var(--radius-sm);">
-        <input class="form-input" type="date" id="ts-start" value="${info.start_date}" style="display:block;"/>
-      </div>
+      <input class="form-input native-input" type="date" id="ts-start" value="${info.start_date}"/>
     </div>
     <div class="form-group"><label class="form-label">Days to wear</label>
       <input class="form-input" type="number" id="ts-days" min="1" max="60" value="${info.days_to_wear}" style="width:100%;box-sizing:border-box;"/>
@@ -810,20 +808,14 @@ function openQuickAddModal(){
     <h3>Add Past Session</h3>
     <p style="font-size:13px;color:var(--text-2);margin-bottom:16px;">Log a session you forgot to track.</p>
     <div class="form-group"><label class="form-label">Date</label>
-      <div style="overflow-x:auto;-webkit-overflow-scrolling:touch;border-radius:var(--radius-sm);">
-        <input class="form-input" type="date" id="qa-date" value="${today}" max="${today}" style="display:block;"/>
-      </div>
+      <input class="form-input native-input" type="date" id="qa-date" value="${today}" max="${today}"/>
     </div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
       <div class="form-group"><label class="form-label">Start time</label>
-        <div style="overflow-x:auto;-webkit-overflow-scrolling:touch;border-radius:var(--radius-sm);">
-          <input class="form-input" type="time" id="qa-start" value="12:00" style="display:block;"/>
-        </div>
+        <input class="form-input native-input" type="time" id="qa-start" value="12:00"/>
       </div>
       <div class="form-group"><label class="form-label">End time</label>
-        <div style="overflow-x:auto;-webkit-overflow-scrolling:touch;border-radius:var(--radius-sm);">
-          <input class="form-input" type="time" id="qa-end" value="12:30" style="display:block;"/>
-        </div>
+        <input class="form-input native-input" type="time" id="qa-end" value="12:30"/>
       </div>
     </div>
     <div class="form-group"><label class="form-label">Meal (optional)</label>
