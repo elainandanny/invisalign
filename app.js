@@ -784,8 +784,14 @@ function openTrayScheduleModal(trayNum){
   const info=state.traySchedule[t]||{start_date:isoDateEST(),days_to_wear:defaultDaysForTray(t)};
   openModal(`
     <h3>Tray #${t} Schedule</h3>
-    <div class="form-group"><label class="form-label">Start date</label><input class="form-input" type="date" id="ts-start" value="${info.start_date}"/></div>
-    <div class="form-group"><label class="form-label">Days to wear</label><input class="form-input" type="number" id="ts-days" min="1" max="60" value="${info.days_to_wear}"/></div>
+    <div class="form-group"><label class="form-label">Start date</label>
+      <div style="overflow-x:auto;-webkit-overflow-scrolling:touch;border-radius:var(--radius-sm);">
+        <input class="form-input" type="date" id="ts-start" value="${info.start_date}" style="display:block;"/>
+      </div>
+    </div>
+    <div class="form-group"><label class="form-label">Days to wear</label>
+      <input class="form-input" type="number" id="ts-days" min="1" max="60" value="${info.days_to_wear}" style="width:100%;box-sizing:border-box;"/>
+    </div>
     <div class="modal-row">
       <button class="modal-btn-primary" onclick="app.saveTrayScheduleModal(${t})">Save</button>
       <button class="modal-btn-cancel" onclick="app.closeModal()">Cancel</button>
@@ -804,15 +810,24 @@ function openQuickAddModal(){
     <h3>Add Past Session</h3>
     <p style="font-size:13px;color:var(--text-2);margin-bottom:16px;">Log a session you forgot to track.</p>
     <div class="form-group"><label class="form-label">Date</label>
-      <input class="form-input" type="date" id="qa-date" value="${today}" max="${today}" style="width:100%;min-width:0;box-sizing:border-box;"/></div>
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;width:100%;box-sizing:border-box;">
-      <div class="form-group" style="min-width:0;"><label class="form-label">Start time</label>
-        <input class="form-input" type="time" id="qa-start" value="12:00" style="width:100%;min-width:0;box-sizing:border-box;"/></div>
-      <div class="form-group" style="min-width:0;"><label class="form-label">End time</label>
-        <input class="form-input" type="time" id="qa-end" value="12:30" style="width:100%;min-width:0;box-sizing:border-box;"/></div>
+      <div style="overflow-x:auto;-webkit-overflow-scrolling:touch;border-radius:var(--radius-sm);">
+        <input class="form-input" type="date" id="qa-date" value="${today}" max="${today}" style="display:block;"/>
+      </div>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+      <div class="form-group"><label class="form-label">Start time</label>
+        <div style="overflow-x:auto;-webkit-overflow-scrolling:touch;border-radius:var(--radius-sm);">
+          <input class="form-input" type="time" id="qa-start" value="12:00" style="display:block;"/>
+        </div>
+      </div>
+      <div class="form-group"><label class="form-label">End time</label>
+        <div style="overflow-x:auto;-webkit-overflow-scrolling:touch;border-radius:var(--radius-sm);">
+          <input class="form-input" type="time" id="qa-end" value="12:30" style="display:block;"/>
+        </div>
+      </div>
     </div>
     <div class="form-group"><label class="form-label">Meal (optional)</label>
-      <select class="form-input" id="qa-meal" style="width:100%;box-sizing:border-box;">
+      <select class="form-input" id="qa-meal">
         <option value="">None</option><option value="breakfast">Breakfast</option>
         <option value="lunch">Lunch</option><option value="dinner">Dinner</option><option value="other">Other</option>
       </select></div>
