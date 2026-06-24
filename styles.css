@@ -177,7 +177,7 @@ body {
 .mobile-nav-item.active { color:var(--sky); border-top-color:var(--sky); font-weight:500; }
 
 /* ── Modals ── */
-.modal-overlay { position:fixed; inset:0; background:rgba(0,0,0,0.35); z-index:200; display:flex; align-items:flex-end; justify-content:center; padding:0 16px; box-sizing:border-box; }
+.modal-overlay { position:fixed; inset:0; background:rgba(0,0,0,0.35); z-index:200; display:flex; align-items:flex-end; justify-content:center; }
 .modal-sheet { background:var(--bg-2); border:1px solid var(--border); border-radius:var(--radius) var(--radius) 0 0; padding:28px 24px; width:100%; max-width:480px; max-height:90vh; overflow-y:auto; overflow-x:hidden; box-sizing:border-box; box-shadow:0 -8px 32px rgba(0,0,0,0.12); }
 .modal-sheet .form-input, .modal-sheet .form-row { max-width:100%; box-sizing:border-box; }
 .modal-sheet .modal-row { margin-left:0; margin-right:0; }
@@ -452,6 +452,8 @@ textarea.form-input { resize:vertical; min-height:80px; }
 }
 @media (min-width:769px) {
   .install-banner { bottom:24px; left:auto; right:24px; max-width:360px; }
+  .modal-overlay { padding:0 24px; align-items:center; }
+  .modal-sheet { max-width:480px; border:1px solid var(--border); border-radius:var(--radius); max-height:85vh; }
 }
 
 /* ── Auth ── */
