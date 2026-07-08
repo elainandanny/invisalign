@@ -165,10 +165,14 @@ async function loadAll() {
   if (!state.isOnline) return; // skip if offline, use cached state
   try {
     const [sess,notes,sched,tray] = await Promise.all([
-      db.from('sessions').select('*').order('started_at',{ascending:false}),
-      db.from('daily_notes').select('*'),
-      db.from('tray_schedule').select('*'),
-      db.from('settings').select('value').eq('key','current_tray').single(),
+      uid() ? db.from('sessions').select('*').eq('user_id',uid()).order('started_at',{ascending:false})
+             : db.from('sessions').select('*').eq('user_id','00000000-0000-0000-0000-000000000001').order('started_at',{ascending:false}),
+      uid() ? db.from('daily_notes').select('*').eq('user_id',uid())
+             : db.from('daily_notes').select('*').eq('user_id','00000000-0000-0000-0000-000000000001'),
+      uid() ? db.from('tray_schedule').select('*').eq('user_id',uid())
+             : db.from('tray_schedule').select('*').eq('user_id','00000000-0000-0000-0000-000000000001'),
+      uid() ? db.from('settings').select('value').eq('key','current_tray').eq('user_id',uid()).maybeSingle()
+             : db.from('settings').select('value').eq('key','current_tray').eq('user_id','00000000-0000-0000-0000-000000000001').maybeSingle(),
     ]);
     if(!sess.error)  state.sessions = sess.data||[];
     if(!notes.error) { state.notes={}; (notes.data||[]).forEach(n=>state.notes[n.date_est]=n.note); }
@@ -181,12 +185,30 @@ async function loadAll() {
 
 async function saveTray(tray) {
   state.currentTray=tray; state.draftTray=tray;
-  if(state.isOnline) await db.from('settings').upsert({key:'current_tray',value:String(tray)});
+  if(state.isOnline && uid()) {
+    const {data} = await db.from('settings')
+      .select('key').eq('key','current_tray').eq('user_id',uid()).maybeSingle();
+    if(data) {
+      await db.from('settings').update({value:String(tray)})
+        .eq('key','current_tray').eq('user_id',uid());
+    } else {
+      await db.from('settings').insert({key:'current_tray',value:String(tray),user_id:uid()});
+    }
+  }
 }
 
 async function saveTrayScheduleRow(trayNum,startDate,daysToWear) {
   state.traySchedule[trayNum]={start_date:startDate,days_to_wear:daysToWear};
-  if(state.isOnline) await db.from('tray_schedule').upsert({tray_number:trayNum,start_date:startDate,days_to_wear:daysToWear});
+  if(state.isOnline && uid()) {
+    const {data} = await db.from('tray_schedule')
+      .select('tray_number').eq('tray_number',trayNum).eq('user_id',uid()).maybeSingle();
+    if(data) {
+      await db.from('tray_schedule').update({start_date:startDate,days_to_wear:daysToWear})
+        .eq('tray_number',trayNum).eq('user_id',uid());
+    } else {
+      await db.from('tray_schedule').insert({tray_number:trayNum,start_date:startDate,days_to_wear:daysToWear,user_id:uid()});
+    }
+  }
 }
 
 async function saveNote(dateEst,text) {
