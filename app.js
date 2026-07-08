@@ -210,20 +210,14 @@ async function loadAll() {
 }
 
 async function saveSetting(key, value) {
-  console.log('[saveSetting] key=',key,'value=',value,'uid=',uid(),'online=',state.isOnline);
-  if(!state.isOnline || !uid()) {
-    console.warn('[saveSetting] aborted - online:',state.isOnline,'uid:',uid());
-    return;
-  }
-  const { data, error: updErr } = await db.from('settings')
+  if(!state.isOnline || !uid()) return;
+  const { data } = await db.from('settings')
     .update({ value: String(value) })
     .eq('key', key)
     .eq('user_id', uid())
     .select();
-  console.log('[saveSetting] update result:', data, 'error:', updErr);
   if (!data || data.length === 0) {
-    const { error: insErr } = await db.from('settings').insert({ key, value: String(value), user_id: uid() });
-    console.log('[saveSetting] insert error:', insErr);
+    await db.from('settings').insert({ key, value: String(value), user_id: uid() });
   }
 }
 
@@ -615,12 +609,9 @@ function drumDown(id){ /* kept for compat */ }
 
 async function saveTrayFromDrum(drumId){
   const v=state.draftTray;
-  console.log('[saveTrayFromDrum] v=',v,'uid=',uid(),'user=',state.user);
-  // If session expired, refresh it first
   if(!uid()) {
     const {data:{session}} = await db.auth.getSession();
     state.user = session?.user || null;
-    console.log('[saveTrayFromDrum] refreshed session, uid=',uid());
   }
   await saveTray(v);
   closeModal();
