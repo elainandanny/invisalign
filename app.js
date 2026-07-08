@@ -4,6 +4,23 @@ const { createClient } = window.supabase;
 const db = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
 const WARN_SECONDS = MAX_OUT_SECONDS + 30 * 60;
+const DEMO_USER_ID = '00000000-0000-0000-0000-000000000001';
+
+// ── Auth helpers ──
+function uid() { return state.user?.id || null; }
+
+async function getUser() {
+  const { data: { user } } = await db.auth.getUser();
+  state.user = user;
+  return user;
+}
+
+db.auth.onAuthStateChange((event, session) => {
+  state.user = session?.user || null;
+  if (event === 'SIGNED_IN' || event === 'SIGNED_OUT') {
+    loadAll().then(() => render());
+  }
+});
 const TOTAL_TRAYS  = 36;
 const QUEUE_KEY    = 'invisalign_offline_queue';
 const TIMER_KEY    = 'sw_startedAt';
@@ -13,6 +30,8 @@ function defaultDaysForTray(t) { return t <= 3 ? 14 : 7; }
 // ── State ──
 const state = {
   view: 'dashboard',
+  user: null,
+  authMode: 'login',
   logFilter: '',
   running: false,
   startedAt: null,
@@ -1191,6 +1210,7 @@ window.app={
 // ── Boot ──
 async function init(){
   try{
+    await getUser();
     state.syncPending=getOfflineQueue().length;
     await loadAll();
     restoreTimer();
