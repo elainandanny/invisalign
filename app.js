@@ -209,24 +209,22 @@ async function loadAll() {
   }
 }
 
-async function saveTray(tray) {
-  state.currentTray=tray; state.draftTray=tray;
-  console.log('[saveTray] tray=', tray, 'uid=', uid(), 'online=', state.isOnline);
-  if(state.isOnline && uid()) {
-    const {data, error:selErr} = await db.from('settings')
-      .select('key').eq('key','current_tray').eq('user_id',uid()).maybeSingle();
-    console.log('[saveTray] existing row=', data, 'selectError=', selErr);
-    if(data) {
-      const {error:updErr} = await db.from('settings').update({value:String(tray)})
-        .eq('key','current_tray').eq('user_id',uid());
-      console.log('[saveTray] update error=', updErr);
-    } else {
-      const {error:insErr} = await db.from('settings').insert({key:'current_tray',value:String(tray),user_id:uid()});
-      console.log('[saveTray] insert error=', insErr);
-    }
-  } else {
-    console.warn('[saveTray] skipped — isOnline:', state.isOnline, 'uid:', uid());
+async function saveSetting(key, value) {
+  if(!state.isOnline || !uid()) return;
+  // Always try update first — if no rows affected, insert
+  const { count } = await db.from('settings')
+    .update({ value: String(value) })
+    .eq('key', key)
+    .eq('user_id', uid())
+    .select('key', { count: 'exact', head: true });
+  if (!count || count === 0) {
+    await db.from('settings').insert({ key, value: String(value), user_id: uid() });
   }
+}
+
+async function saveTray(tray) {
+  state.currentTray = tray; state.draftTray = tray;
+  await saveSetting('current_tray', tray);
 }
 
 async function saveTrayScheduleRow(trayNum,startDate,daysToWear) {
