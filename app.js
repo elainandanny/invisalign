@@ -6,6 +6,32 @@ const db = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 const WARN_SECONDS = MAX_OUT_SECONDS + 30 * 60;
 const DEMO_USER_ID = '00000000-0000-0000-0000-000000000001';
 
+const PALETTES = {
+  default:    { name:'Pastel',        colors:['#5BAFD6','#6BBF8E','#9B8EC4','#D4A843','#D97B6C'] },
+  tiana:      { name:'Tiana',         colors:['#3D7A5A','#7BB860','#C9973A','#D4A84A','#C86040'] },
+  ariel:      { name:'Ariel',         colors:['#3AADA8','#5BAA7A','#8B6BAA','#D4854A','#C84A5A'] },
+  cinderella: { name:'Cinderella',    colors:['#4878B0','#6AA8C8','#9888C0','#B8A060','#C07888'] },
+  rapunzel:   { name:'Rapunzel',      colors:['#9870C0','#8BAA5B','#D4B83A','#C0905A','#C05870'] },
+  moana:      { name:'Moana',         colors:['#2878A8','#3A9BA8','#C0784A','#D4A030','#D06040'] },
+  elsa:       { name:'Elsa',          colors:['#4888C0','#70B8D8','#9098D0','#88B0D0','#C080B0'] },
+  cruise:     { name:'Disney Cruise', colors:['#1B3D5C','#4A8FA8','#F2C94C','#D4900A','#B33A3A'] },
+};
+
+function applyTheme() {
+  document.body.setAttribute('data-theme', state.darkMode ? 'dark' : 'light');
+  document.body.setAttribute('data-palette', state.palette === 'default' ? '' : state.palette);
+}
+
+function getPaletteColors() {
+  const p = PALETTES[state.palette] || PALETTES['default'];
+  return { sky:p.colors[0], sage:p.colors[1], lavender:p.colors[2], butter:p.colors[3], peach:p.colors[4] };
+}
+
+function hexToRgba(hex, alpha) {
+  const r=parseInt(hex.slice(1,3),16), g=parseInt(hex.slice(3,5),16), b=parseInt(hex.slice(5,7),16);
+  return `rgba(${r},${g},${b},${alpha})`;
+}
+
 // ── Auth helpers ──
 function uid() { return state.user?.id || null; }
 
@@ -39,6 +65,8 @@ const state = {
   view: 'dashboard',
   user: null,
   authMode: 'login',
+  darkMode: false,
+  palette: 'default',
   logFilter: '',
   running: false,
   startedAt: null,
@@ -188,6 +216,10 @@ function restoreTimer() {
 
 // ── Supabase ──
 async function loadAll() {
+  // Restore theme from localStorage instantly
+  state.darkMode = localStorage.getItem('darkMode') === 'true';
+  state.palette  = localStorage.getItem('palette') || 'default';
+  applyTheme();
   if (!state.isOnline) return; // skip if offline, use cached state
   try {
     const [sess,notes,sched,tray] = await Promise.all([
@@ -804,14 +836,16 @@ function sidebarHTML(){return `<aside class="sidebar">
   <div class="tray-badge"><label>Current Tray</label>${trayDrumHTML('sidebar-drum')}<button class="tray-save-btn" onclick="app.saveTrayFromDrum('sidebar-drum')">Save tray</button></div>
 </aside>`;}
 
-function mobileHeaderHTML(){return `<header class="mobile-header">
+function mobileHeaderHTML(){
+  return `<header class="mobile-header">
   <div style="display:flex;align-items:center;gap:8px;">
     <span class="mobile-header-title">Invisalign</span>
     <div id="offline-dot" class="offline-dot" style="display:${state.isOnline?'none':'block'}" title="Offline"></div>
   </div>
-  <div style="display:flex;align-items:center;gap:8px;">
+  <div class="mobile-header-right">
     ${state.syncPending>0?`<button class="sync-chip" onclick="app.syncNow()">⟳ ${state.syncPending} pending</button>`:''}
     <button class="mobile-tray-btn" onclick="app.openTrayModal()">Tray #${state.currentTray}</button>
+    <button class="gear-btn" onclick="app.navigate('settings')" title="Settings">⚙</button>
   </div>
 </header>`;}
 
@@ -1167,6 +1201,107 @@ function refreshView(){
   if(state.view==='progress') renderProgress();
 }
 
+function renderSettings(){
+  const overall = typeof overallProgress === 'function' ? overallProgress() : null;
+  const paletteCards = Object.entries(PALETTES).map(([key,p])=>{
+    const swatches = p.colors.map(c=>`<div class="palette-swatch" style="background:${c}"></div>`).join('');
+    return `<div class="palette-card ${state.palette===key?'active':''}" onclick="app.setPalette('${key}')">
+      <div class="palette-swatches">${swatches}</div>
+      <div class="palette-name">${p.name}</div>
+    </div>`;
+  }).join('');
+
+  const trayGrid = Array.from({length:TOTAL_TRAYS},(_,i)=>i+1).map(t=>{
+    const info = state.traySchedule[t];
+    const isCurrent = t===state.currentTray, isDone = t<state.currentTray;
+    const bg = isCurrent?'var(--sky-lt)':isDone?'var(--sage-lt)':'var(--bg-3)';
+    const border = isCurrent?'var(--sky)':isDone?'var(--sage)':'var(--border)';
+    const color = isCurrent?'var(--sky)':isDone?'var(--sage)':'var(--text)';
+    return `<div onclick="app.openTrayScheduleModal(${t})"
+      style="padding:8px 4px;background:${bg};border:1px solid ${border};border-radius:var(--radius-sm);text-align:center;cursor:pointer;">
+      <div style="font-family:'DM Mono',monospace;font-size:12px;font-weight:700;color:${color}">${t}</div>
+      <div style="font-size:9px;color:var(--text-3)">${info?info.days_to_wear+'d':'—'}</div>
+    </div>`;
+  }).join('');
+
+  const userEmail = state.user?.email||'';
+  const userInitial = userEmail ? userEmail[0].toUpperCase() : '?';
+  const authHTML = state.user ? `
+    <div class="card" style="margin-bottom:16px;">
+      <div class="section-title">Account</div>
+      <div class="auth-user-row">
+        <div class="auth-avatar">${userInitial}</div>
+        <div class="auth-info">
+          <div class="auth-email">${userEmail}</div>
+          <div class="auth-status">Signed in · data syncs across devices</div>
+        </div>
+        <button class="auth-logout-btn" onclick="app.signOut()">Sign out</button>
+      </div>
+    </div>` : `
+    <div class="card" style="margin-bottom:16px;">
+      <div class="section-title">Account</div>
+      <p style="font-size:13px;color:var(--text-2);margin-bottom:14px;">Sign in to sync your data across devices.</p>
+      <div class="auth-form">
+        <input class="auth-input" type="email" id="auth-email" placeholder="Email address" autocomplete="email"/>
+        <input class="auth-input" type="password" id="auth-password" placeholder="Password (min 6 characters)"/>
+        <div id="auth-msg"></div>
+        <div class="auth-btn-row">
+          <button class="auth-btn-primary" onclick="app.submitAuth()">${state.authMode==='login'?'Sign In':'Create Account'}</button>
+        </div>
+        <div class="auth-toggle">
+          ${state.authMode==='login'
+            ?`No account? <button onclick="app.toggleAuthMode()">Create one</button>`
+            :`Already have one? <button onclick="app.toggleAuthMode()">Sign in</button>`}
+        </div>
+      </div>
+    </div>`;
+
+  document.querySelector('.main').innerHTML = `
+    <div class="page-title">Settings</div>
+    ${authHTML}
+    <div class="card" style="margin-bottom:16px;">
+      <div class="section-title">Appearance</div>
+      <div class="settings-row">
+        <div><div class="settings-row-label">Dark Mode</div><div class="settings-row-sub">Switch to a dark background</div></div>
+        <label class="toggle">
+          <input type="checkbox" ${state.darkMode?'checked':''} onchange="app.toggleDark(this.checked)"/>
+          <span class="toggle-slider"></span>
+        </label>
+      </div>
+    </div>
+    <div class="card" style="margin-bottom:16px;">
+      <div class="section-title">Color Palette</div>
+      <div class="palette-grid">${paletteCards}</div>
+    </div>
+    <div class="card" style="margin-bottom:16px;">
+      <div class="section-title">Treatment</div>
+      <div class="settings-row">
+        <div><div class="settings-row-label">Total Trays</div><div class="settings-row-sub">Currently ${TOTAL_TRAYS} trays</div></div>
+        <div style="display:flex;gap:8px;align-items:center;">
+          <input class="settings-num" type="number" id="setting-total-trays" min="1" max="99" value="${TOTAL_TRAYS}"/>
+          <button class="settings-save-btn" onclick="app.saveTotalTrays()">Save</button>
+        </div>
+      </div>
+      <div class="settings-row">
+        <div><div class="settings-row-label">Daily Wear Limit</div><div class="settings-row-sub">Max time out per day</div></div>
+        <div style="display:flex;gap:8px;align-items:center;">
+          <input class="settings-num" type="number" id="setting-wear-limit" min="1" max="6" value="${MAX_OUT_SECONDS/3600}" step="0.5" style="width:80px"/>
+          <button class="settings-save-btn" onclick="app.saveWearLimit()">Save</button>
+        </div>
+      </div>
+      ${overall?`<div class="settings-row">
+        <div><div class="settings-row-label">Overall Progress</div>
+        <div class="settings-row-sub">Day ${overall.elapsed} of ${overall.totalDays} · Est. done ${new Date(overall.endDate+'T12:00:00').toLocaleDateString('en-US',{month:'long',year:'numeric'})}</div></div>
+        <div style="font-family:'DM Mono',monospace;font-size:18px;font-weight:700;color:var(--sage)">${overall.pct}%</div>
+      </div>`:''}
+    </div>
+    <div class="card">
+      <div class="section-title">Tray Schedule</div>
+      <button class="sw-btn sw-btn-quick" style="width:100%;padding:9px;margin-bottom:12px;" onclick="app.openSetup()">Auto-generate All ${TOTAL_TRAYS} Trays</button>
+      <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(52px,1fr));gap:6px;">${trayGrid}</div>
+    </div>`;
+}
+
 function render(){
   document.getElementById('app').innerHTML=`
     <div class="layout">
@@ -1182,6 +1317,7 @@ function render(){
   else if(state.view==='progress') renderProgress();
   else if(state.view==='graphs')   renderGraphs();
   else if(state.view==='calendar') renderCalendar();
+  else if(state.view==='settings') renderSettings();
   state.syncPending=getOfflineQueue().length;
   updateSyncBadge();
   // Init sidebar drum
