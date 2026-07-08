@@ -10,6 +10,13 @@ const DEMO_USER_ID = '00000000-0000-0000-0000-000000000001';
 function uid() { return state.user?.id || null; }
 
 async function getUser() {
+  // Try session first (faster, works offline)
+  const { data: { session } } = await db.auth.getSession();
+  if (session?.user) {
+    state.user = session.user;
+    return session.user;
+  }
+  // Fall back to full getUser check
   const { data: { user } } = await db.auth.getUser();
   state.user = user;
   return user;
