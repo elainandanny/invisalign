@@ -211,15 +211,21 @@ async function loadAll() {
 
 async function saveTray(tray) {
   state.currentTray=tray; state.draftTray=tray;
+  console.log('[saveTray] tray=', tray, 'uid=', uid(), 'online=', state.isOnline);
   if(state.isOnline && uid()) {
-    const {data} = await db.from('settings')
+    const {data, error:selErr} = await db.from('settings')
       .select('key').eq('key','current_tray').eq('user_id',uid()).maybeSingle();
+    console.log('[saveTray] existing row=', data, 'selectError=', selErr);
     if(data) {
-      await db.from('settings').update({value:String(tray)})
+      const {error:updErr} = await db.from('settings').update({value:String(tray)})
         .eq('key','current_tray').eq('user_id',uid());
+      console.log('[saveTray] update error=', updErr);
     } else {
-      await db.from('settings').insert({key:'current_tray',value:String(tray),user_id:uid()});
+      const {error:insErr} = await db.from('settings').insert({key:'current_tray',value:String(tray),user_id:uid()});
+      console.log('[saveTray] insert error=', insErr);
     }
+  } else {
+    console.warn('[saveTray] skipped — isOnline:', state.isOnline, 'uid:', uid());
   }
 }
 
