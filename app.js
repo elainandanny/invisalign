@@ -1063,6 +1063,7 @@ function renderProgress(){
           :'<p style="font-size:13px;color:var(--text-3)">Need more sessions.</p>'}
       </div>
       <div class="card">${allTimeHTML()}</div>
+      <div class="card">${mealAvgHTML()}</div>
       <div class="card span-full">
         <div class="section-title">30-day Compliance</div>
         <div class="chart-wrap" style="height:150px;"><canvas id="chart-comp"></canvas></div>
@@ -1092,6 +1093,28 @@ function allTimeHTML(){
     <div class="insight-row"><span class="insight-key">Avg per session</span><span class="insight-val">${avg?fmtDur(avg):'—'}</span></div>
     <div class="insight-row"><span class="insight-key">Best day</span><span class="insight-val c-sage">${best?fmtDur(best):'—'}</span></div>`;
 }
+function mealAvgHTML(){
+  const allSessions=[...state.sessions,...getOfflineQueue()];
+  const tags=['breakfast','lunch','dinner','other'];
+  const counts={}, totals={};
+  tags.forEach(t=>{ counts[t]=0; totals[t]=0; });
+  allSessions.forEach(s=>{
+    const t=s.meal_tag&&tags.includes(s.meal_tag)?s.meal_tag:null;
+    if(t){ counts[t]++; totals[t]+=s.duration_seconds; }
+  });
+  const hasData=tags.some(t=>counts[t]>0);
+  if(!hasData) return `<div class="section-title">Avg by Meal</div><p style="font-size:13px;color:var(--text-3)">Tag sessions to see averages.</p>`;
+  const rows=tags.filter(t=>counts[t]>0).map(t=>{
+    const avg=Math.round(totals[t]/counts[t]);
+    const col=avg>=WARN_SECONDS?'var(--peach)':avg>=MAX_OUT_SECONDS?'var(--butter)':'var(--sage)';
+    return `<div class="insight-row">
+      <span class="insight-key">${t.charAt(0).toUpperCase()+t.slice(1)}</span>
+      <span class="insight-val" style="color:${col}">${fmtDur(avg)}</span>
+    </div>`;
+  }).join('');
+  return `<div class="section-title">Avg by Meal</div>${rows}`;
+}
+
 function drawCompChart(){
   const byDate={};
   const allSessions=[...state.sessions,...getOfflineQueue()];
