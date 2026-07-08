@@ -6,55 +6,30 @@ const db = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 const WARN_SECONDS = MAX_OUT_SECONDS + 30 * 60;
 const DEMO_USER_ID = '00000000-0000-0000-0000-000000000001';
 
-const PALETTES = {
-  default:    { name:'Pastel',        colors:['#5BAFD6','#6BBF8E','#9B8EC4','#D4A843','#D97B6C'] },
-  tiana:      { name:'Tiana',         colors:['#3D7A5A','#7BB860','#C9973A','#D4A84A','#C86040'] },
-  ariel:      { name:'Ariel',         colors:['#3AADA8','#5BAA7A','#8B6BAA','#D4854A','#C84A5A'] },
-  cinderella: { name:'Cinderella',    colors:['#4878B0','#6AA8C8','#9888C0','#B8A060','#C07888'] },
-  rapunzel:   { name:'Rapunzel',      colors:['#9870C0','#8BAA5B','#D4B83A','#C0905A','#C05870'] },
-  moana:      { name:'Moana',         colors:['#2878A8','#3A9BA8','#C0784A','#D4A030','#D06040'] },
-  elsa:       { name:'Elsa',          colors:['#4888C0','#70B8D8','#9098D0','#88B0D0','#C080B0'] },
-  cruise:     { name:'Disney Cruise', colors:['#1B3D5C','#4A8FA8','#F2C94C','#D4900A','#B33A3A'] },
-};
-
-function applyTheme() {
-  document.body.setAttribute('data-theme', state.darkMode ? 'dark' : 'light');
-  document.body.setAttribute('data-palette', state.palette === 'default' ? '' : state.palette);
-}
-
-function getPaletteColors() {
-  const p = PALETTES[state.palette] || PALETTES['default'];
-  return { sky:p.colors[0], sage:p.colors[1], lavender:p.colors[2], butter:p.colors[3], peach:p.colors[4] };
-}
-
-function hexToRgba(hex, alpha) {
-  const r=parseInt(hex.slice(1,3),16), g=parseInt(hex.slice(3,5),16), b=parseInt(hex.slice(5,7),16);
-  return `rgba(${r},${g},${b},${alpha})`;
-}
-
 // ── Auth helpers ──
-function uid() { return state.user?.id || null; }
-
 async function getUser() {
-  // Try session first (faster, works offline)
+  // getSession() reads from local cache — fast and reliable on page load
   const { data: { session } } = await db.auth.getSession();
   if (session?.user) {
     state.user = session.user;
     return session.user;
   }
-  // Fall back to full getUser check
+  // Fall back to network check
   const { data: { user } } = await db.auth.getUser();
   state.user = user;
   return user;
 }
+function uid() { return state.user?.id || null; }
 
+// Auth state change listener
 db.auth.onAuthStateChange((event, session) => {
   state.user = session?.user || null;
   if (event === 'SIGNED_IN' || event === 'SIGNED_OUT') {
+    // Reload all data and re-render when auth changes
     loadAll().then(() => render());
   }
 });
-const TOTAL_TRAYS  = 36;
+let TOTAL_TRAYS  = 36; // overridden from Supabase settings on load
 const QUEUE_KEY    = 'invisalign_offline_queue';
 const TIMER_KEY    = 'sw_startedAt';
 
@@ -63,11 +38,11 @@ function defaultDaysForTray(t) { return t <= 3 ? 14 : 7; }
 // ── State ──
 const state = {
   view: 'dashboard',
-  user: null,
-  authMode: 'login',
+  logFilter: '',
   darkMode: false,
   palette: 'default',
-  logFilter: '',
+  user: null,        // Supabase auth user
+  authMode: 'login', // 'login' | 'signup'
   running: false,
   startedAt: null,
   elapsed: 0,
@@ -90,6 +65,13 @@ const state = {
 
 // ── Helpers ──
 const fmt = sec => [Math.floor(sec/3600), Math.floor((sec%3600)/60), sec%60].map(n=>String(n).padStart(2,'0')).join(':');
+// Compact format for calendar cells: 2h46 or 49m
+function fmtCal(sec) {
+  const h = Math.floor(sec/3600);
+  const m = Math.floor((sec%3600)/60);
+  if (h > 0) return m > 0 ? `${h}h${m}` : `${h}h`;
+  return `${m}m`;
+}
 function fmtDur(sec) {
   const h=Math.floor(sec/3600), m=Math.floor((sec%3600)/60);
   if(h>0&&m>0) return `${h}h ${m}m`; if(h>0) return `${h}h`; return `${m}m`;
@@ -116,6 +98,24 @@ function statColor(sec) {
 }
 function remColor(rem) {
   if(rem<=0) return 'c-peach'; if(rem<=1800) return 'c-butter'; return 'c-sky';
+}
+
+// ── Palettes ──
+const PALETTES = {
+  // Colors shown in order: sky, sage, lavender, butter, peach
+  default:     { name:'Pastel',         colors:['#5BAFD6','#6BBF8E','#9B8EC4','#D4A843','#D97B6C'] },
+  tiana:       { name:'Tiana',          colors:['#3D7A5A','#7BB860','#C9973A','#D4A84A','#C86040'] },
+  ariel:       { name:'Ariel',          colors:['#3AADA8','#5BAA7A','#8B6BAA','#D4854A','#C84A5A'] },
+  cinderella:  { name:'Cinderella',     colors:['#4878B0','#6AA8C8','#9888C0','#B8A060','#C07888'] },
+  rapunzel:    { name:'Rapunzel',       colors:['#9870C0','#8BAA5B','#D4B83A','#C0905A','#C05870'] },
+  moana:       { name:'Moana',          colors:['#2878A8','#3A9BA8','#C0784A','#D4A030','#D06040'] },
+  elsa:        { name:'Elsa',           colors:['#4888C0','#70B8D8','#9098D0','#88B0D0','#C080B0'] },
+  cruise:      { name:'Disney Cruise',  colors:['#1B3D5C','#4A8FA8','#F2C94C','#D4900A','#B33A3A'] },
+};
+
+function applyTheme() {
+  document.body.setAttribute('data-theme', state.darkMode ? 'dark' : 'light');
+  document.body.setAttribute('data-palette', state.palette === 'default' ? '' : state.palette);
 }
 
 // ── Offline Queue ──
@@ -216,26 +216,37 @@ function restoreTimer() {
 
 // ── Supabase ──
 async function loadAll() {
-  // Restore theme from localStorage instantly
+  // Restore theme from localStorage first (instant, no flash)
   state.darkMode = localStorage.getItem('darkMode') === 'true';
   state.palette  = localStorage.getItem('palette') || 'default';
   applyTheme();
   if (!state.isOnline) return; // skip if offline, use cached state
   try {
+    const userId = uid();
     const [sess,notes,sched,tray] = await Promise.all([
-      uid() ? db.from('sessions').select('*').eq('user_id',uid()).order('started_at',{ascending:false})
-             : db.from('sessions').select('*').eq('user_id','00000000-0000-0000-0000-000000000001').order('started_at',{ascending:false}),
-      uid() ? db.from('daily_notes').select('*').eq('user_id',uid())
-             : db.from('daily_notes').select('*').eq('user_id','00000000-0000-0000-0000-000000000001'),
-      uid() ? db.from('tray_schedule').select('*').eq('user_id',uid())
-             : db.from('tray_schedule').select('*').eq('user_id','00000000-0000-0000-0000-000000000001'),
-      uid() ? db.from('settings').select('value').eq('key','current_tray').eq('user_id',uid()).maybeSingle()
-             : db.from('settings').select('value').eq('key','current_tray').eq('user_id','00000000-0000-0000-0000-000000000001').maybeSingle(),
+      userId
+        ? db.from('sessions').select('*').eq('user_id',userId).order('started_at',{ascending:false})
+        : db.from('sessions').select('*').eq('user_id',DEMO_USER_ID).order('started_at',{ascending:false}),
+      userId
+        ? db.from('daily_notes').select('*').eq('user_id',userId)
+        : db.from('daily_notes').select('*').eq('user_id',DEMO_USER_ID),
+      userId
+        ? db.from('tray_schedule').select('*').eq('user_id',userId)
+        : db.from('tray_schedule').select('*').eq('user_id',DEMO_USER_ID),
+      userId
+        ? db.from('settings').select('value').eq('key','current_tray').eq('user_id',userId).maybeSingle()
+        : db.from('settings').select('value').eq('key','current_tray').eq('user_id',DEMO_USER_ID).maybeSingle(),
     ]);
     if(!sess.error)  state.sessions = sess.data||[];
     if(!notes.error) { state.notes={}; (notes.data||[]).forEach(n=>state.notes[n.date_est]=n.note); }
     if(!sched.error) { state.traySchedule={}; (sched.data||[]).forEach(t=>state.traySchedule[t.tray_number]={start_date:t.start_date,days_to_wear:t.days_to_wear}); }
     if(tray.data)    { state.currentTray=parseInt(tray.data.value)||1; state.draftTray=state.currentTray; }
+  // Load total trays setting
+  const userId2 = uid();
+  const totalTraySetting = await (userId2
+    ? db.from('settings').select('value').eq('key','total_trays').eq('user_id',userId2).maybeSingle()
+    : db.from('settings').select('value').eq('key','total_trays').eq('user_id',DEMO_USER_ID).maybeSingle());
+  if(totalTraySetting.data) TOTAL_TRAYS = parseInt(totalTraySetting.data.value)||36;
   } catch(e) {
     console.warn('loadAll failed (offline?):', e);
   }
@@ -243,6 +254,7 @@ async function loadAll() {
 
 async function saveSetting(key, value) {
   if(!state.isOnline || !uid()) return;
+  // Update first — if no rows matched, insert
   const { data } = await db.from('settings')
     .update({ value: String(value) })
     .eq('key', key)
@@ -261,12 +273,10 @@ async function saveTray(tray) {
 async function saveTrayScheduleRow(trayNum,startDate,daysToWear) {
   state.traySchedule[trayNum]={start_date:startDate,days_to_wear:daysToWear};
   if(state.isOnline && uid()) {
-    const {data} = await db.from('tray_schedule')
-      .select('tray_number').eq('tray_number',trayNum).eq('user_id',uid()).maybeSingle();
-    if(data) {
-      await db.from('tray_schedule').update({start_date:startDate,days_to_wear:daysToWear})
-        .eq('tray_number',trayNum).eq('user_id',uid());
-    } else {
+    const { data } = await db.from('tray_schedule')
+      .update({start_date:startDate,days_to_wear:daysToWear})
+      .eq('tray_number',trayNum).eq('user_id',uid()).select();
+    if(!data || data.length===0) {
       await db.from('tray_schedule').insert({tray_number:trayNum,start_date:startDate,days_to_wear:daysToWear,user_id:uid()});
     }
   }
@@ -276,13 +286,41 @@ async function saveNote(dateEst,text) {
   if(!text.trim()) { delete state.notes[dateEst]; }
   else { state.notes[dateEst]=text.trim(); }
   if(state.isOnline) {
-    if(!text.trim()) await db.from('daily_notes').delete().eq('date_est',dateEst);
-    else await db.from('daily_notes').upsert({date_est:dateEst,note:text.trim(),updated_at:new Date().toISOString()});
+    const userId = uid();
+    if(!text.trim()) {
+      // Delete
+      let q = db.from('daily_notes').delete().eq('date_est',dateEst);
+      if(userId) q = q.eq('user_id',userId);
+      await q;
+    } else {
+      // Check if note exists first, then update or insert
+      let existing;
+      if(userId) {
+        const {data} = await db.from('daily_notes').select('id').eq('date_est',dateEst).eq('user_id',userId).maybeSingle();
+        existing = data;
+      }
+      if(existing) {
+        // Update existing note
+        await db.from('daily_notes')
+          .update({note:text.trim(), updated_at:new Date().toISOString()})
+          .eq('id', existing.id);
+      } else {
+        // Insert new note
+        const row = {date_est:dateEst, note:text.trim(), updated_at:new Date().toISOString()};
+        if(userId) row.user_id = userId;
+        await db.from('daily_notes').insert(row);
+      }
+    }
   }
 }
 
 async function insertSession(sessionData) {
+  if (!uid()) {
+    showToastMessage('Sign in to save sessions to your account');
+    return false;
+  }
   if (state.isOnline) {
+    sessionData.user_id = uid();
     const { error } = await db.from('sessions').insert(sessionData);
     if (error) {
       console.error('Insert failed, queuing offline:', error);
@@ -367,6 +405,13 @@ function startTimer() {
 
 async function stopTimer() {
   if(!state.running) return;
+  if(!uid()) {
+    clearInterval(state.ticker);
+    state.running=false; state.elapsed=0; state.startedAt=null; state.activeMealTag=null;
+    persistTimer(); renderSWButtons(); updateSWDisplay();
+    showToastMessage('Sign in to save sessions to your account');
+    return;
+  }
   clearInterval(state.ticker); state.running=false;
 
   // Capture everything BEFORE clearing state
@@ -650,10 +695,38 @@ async function saveTrayFromDrum(drumId){
   render();
 }
 
+function overallProgress() {
+  const sched = state.traySchedule;
+  if (!sched[1]) return null;
+  const tray1Start = new Date(sched[1].start_date + 'T12:00:00');
+  let totalDays = 0;
+  for (let t = 1; t <= TOTAL_TRAYS; t++) {
+    totalDays += sched[t] ? sched[t].days_to_wear : defaultDaysForTray(t);
+  }
+  const today   = new Date(isoDateEST() + 'T12:00:00');
+  const elapsed = Math.max(0, Math.round((today - tray1Start) / 86400000));
+  const pct     = Math.min(100, Math.round((elapsed / totalDays) * 100));
+  const endDate = new Date(tray1Start);
+  endDate.setDate(endDate.getDate() + totalDays);
+  return { elapsed, totalDays, pct, endDate: isoDateEST(endDate) };
+}
+
 function trayProgressCardHTML(){
-  const trayInfo=currentTrayInfo();
-  const hasSchedule=Object.keys(state.traySchedule).length>0;
-  if(trayInfo){
+  const overall = overallProgress();
+  const trayInfo = currentTrayInfo();
+  const hasSchedule = Object.keys(state.traySchedule).length > 0;
+
+  if (trayInfo) {
+    const overallHTML = overall ? `
+      <div style="margin-top:14px;padding-top:14px;border-top:1px solid var(--border);">
+        <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:6px;">
+          <span style="font-family:'DM Mono',monospace;font-size:16px;font-weight:700;color:var(--sage)">${overall.pct}%</span>
+          <span style="font-size:11px;color:var(--text-3);">Done ~${new Date(overall.endDate+'T12:00:00').toLocaleDateString('en-US',{month:'short',year:'numeric'})}</span>
+        </div>
+        <div style="height:8px;background:var(--bg-3);border-radius:4px;overflow:hidden;">
+          <div style="height:100%;width:${overall.pct}%;background:var(--sage);border-radius:4px;transition:width 0.6s ease;"></div>
+        </div>
+      </div>` : '';
     return `<div class="card" id="tray-progress-card">
       <div class="section-title">Tray Progress</div>
       <div class="tray-card">
@@ -673,15 +746,19 @@ function trayProgressCardHTML(){
           <button class="tray-edit-btn" onclick="app.openTrayScheduleModal(${state.currentTray})">Edit schedule</button>
         </div>
       </div>
+      ${overallHTML}
     </div>`;
   }
+
+  // No schedule at all
   return `<div class="card" id="tray-progress-card">
     <div class="section-title">Tray Schedule</div>
     <p style="font-size:13px;color:var(--text-2);margin-bottom:12px;">${hasSchedule?`Tray #${state.currentTray} not configured.`:'Set up your schedule for change countdowns.'}</p>
     <button class="sw-btn sw-btn-quick" style="width:100%;padding:8px;" onclick="app.openTrayScheduleModal(${state.currentTray})">${hasSchedule?`Configure Tray #${state.currentTray}`:'Configure This Tray'}</button>
-    ${!hasSchedule?`<button class="sw-btn sw-btn-quick" style="width:100%;padding:8px;margin-top:8px;" onclick="app.openSetup()">Auto-generate All 36 Trays</button>`:''}
+    ${!hasSchedule?`<button class="sw-btn sw-btn-quick" style="width:100%;padding:8px;margin-top:8px;" onclick="app.openSetup()">Auto-generate All ${TOTAL_TRAYS} Trays</button>`:''}
   </div>`;
 }
+  
 
 function openTrayModal(){
   state.draftTray=state.currentTray;
@@ -710,7 +787,12 @@ function openSetupModal(){
 async function submitSetup(){
   const start=document.getElementById('setup-start')?.value; if(!start) return;
   const schedule=buildDefaultSchedule(start);
-  const rows=Object.entries(schedule).map(([t,v])=>({tray_number:parseInt(t),start_date:v.start_date,days_to_wear:v.days_to_wear}));
+  const userId3 = uid();
+  const rows=Object.entries(schedule).map(([t,v])=>{
+    const r={tray_number:parseInt(t),start_date:v.start_date,days_to_wear:v.days_to_wear};
+    if(userId3) r.user_id=userId3;
+    return r;
+  });
   if(state.isOnline) await db.from('tray_schedule').upsert(rows);
   state.traySchedule=schedule;
   closeModal(); render();
@@ -721,8 +803,12 @@ function openTrayScheduleModal(trayNum){
   const info=state.traySchedule[t]||{start_date:isoDateEST(),days_to_wear:defaultDaysForTray(t)};
   openModal(`
     <h3>Tray #${t} Schedule</h3>
-    <div class="form-group"><label class="form-label">Start date</label><input class="form-input" type="date" id="ts-start" value="${info.start_date}"/></div>
-    <div class="form-group"><label class="form-label">Days to wear</label><input class="form-input" type="number" id="ts-days" min="1" max="60" value="${info.days_to_wear}"/></div>
+    <div class="form-group"><label class="form-label">Start date</label>
+      <input class="form-input native-input" type="date" id="ts-start" value="${info.start_date}"/>
+    </div>
+    <div class="form-group"><label class="form-label">Days to wear</label>
+      <input class="form-input" type="number" id="ts-days" min="1" max="60" value="${info.days_to_wear}" style="width:100%;box-sizing:border-box;"/>
+    </div>
     <div class="modal-row">
       <button class="modal-btn-primary" onclick="app.saveTrayScheduleModal(${t})">Save</button>
       <button class="modal-btn-cancel" onclick="app.closeModal()">Cancel</button>
@@ -740,10 +826,16 @@ function openQuickAddModal(){
   openModal(`
     <h3>Add Past Session</h3>
     <p style="font-size:13px;color:var(--text-2);margin-bottom:16px;">Log a session you forgot to track.</p>
-    <div class="form-group"><label class="form-label">Date</label><input class="form-input" type="date" id="qa-date" value="${today}" max="${today}"/></div>
-    <div class="form-row">
-      <div class="form-group"><label class="form-label">Start time</label><input class="form-input" type="time" id="qa-start" value="12:00"/></div>
-      <div class="form-group"><label class="form-label">End time</label><input class="form-input" type="time" id="qa-end" value="12:30"/></div>
+    <div class="form-group"><label class="form-label">Date</label>
+      <input class="form-input native-input" type="date" id="qa-date" value="${today}" max="${today}"/>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+      <div class="form-group"><label class="form-label">Start time</label>
+        <input class="form-input native-input" type="time" id="qa-start" value="12:00"/>
+      </div>
+      <div class="form-group"><label class="form-label">End time</label>
+        <input class="form-input native-input" type="time" id="qa-end" value="12:30"/>
+      </div>
     </div>
     <div class="form-group"><label class="form-label">Meal (optional)</label>
       <select class="form-input" id="qa-meal">
@@ -836,8 +928,7 @@ function sidebarHTML(){return `<aside class="sidebar">
   <div class="tray-badge"><label>Current Tray</label>${trayDrumHTML('sidebar-drum')}<button class="tray-save-btn" onclick="app.saveTrayFromDrum('sidebar-drum')">Save tray</button></div>
 </aside>`;}
 
-function mobileHeaderHTML(){
-  return `<header class="mobile-header">
+function mobileHeaderHTML(){return `<header class="mobile-header">
   <div style="display:flex;align-items:center;gap:8px;">
     <span class="mobile-header-title">Invisalign</span>
     <div id="offline-dot" class="offline-dot" style="display:${state.isOnline?'none':'block'}" title="Offline"></div>
@@ -868,6 +959,9 @@ function dashboardHTML(){
 
   return `
     <div class="page-title">Dashboard</div>
+    ${!state.user ? `<div class="alert-bar info" style="cursor:pointer" onclick="app.navigate('settings')">
+      👋 <span><strong>Demo mode</strong> — you're viewing sample data. <u>Sign in</u> to track your own aligners.</span>
+    </div>` : ''}
     ${!state.isOnline?`<div class="alert-bar info">📴 You're offline — sessions will save locally and sync when you reconnect.</div>`:''}
     <div id="sw-alert" class="alert-bar" style="display:none"></div>
     <div class="dash-grid">
@@ -998,11 +1092,16 @@ function applyLogFilter() {
 
 function logSessionRowHTML(s){
   return `<div class="log-session-row ${s._offline?'log-session-offline':''}">
-    <span class="log-datetime">${s.date_est||'—'} <span class="log-time">${s.time_est||'—'}</span></span>
-    ${s._offline?'<span class="offline-pill">sync</span>':(s.meal_tag
-      ?`<button class="meal-pill meal-pill-btn" onclick="app.openEditMeal('${s.id}','${s.meal_tag}')">${s.meal_tag} ✎</button>`
-      :`<button class="meal-pill-empty" onclick="app.openEditMeal('${s.id}','')">+ meal</button>`)}
-    <span class="tray-pill">T${s.tray_number}</span>
+    <div class="log-col-date">
+      <span class="log-date">${s.date_est||'—'}</span>
+      <span class="log-time">${s.time_est||'—'}</span>
+    </div>
+    <div class="log-col-tags">
+      ${s._offline?'<span class="offline-pill">sync</span>':(s.meal_tag
+        ?`<button class="meal-pill meal-pill-btn" onclick="app.openEditMeal('${s.id}','${s.meal_tag}')">${s.meal_tag} ✎</button>`
+        :`<button class="meal-pill-empty" onclick="app.openEditMeal('${s.id}','')">+ meal</button>`)}
+      <span class="tray-pill">T${s.tray_number}</span>
+    </div>
     <span class="log-duration" style="color:${statusColor(s.duration_seconds)}">${fmtDur(s.duration_seconds)}</span>
     ${!s._offline?`<button class="delete-btn" onclick="app.askDelete('${s.id}','${s.date_est}')">✕</button>`:'<span style="color:var(--butter)">⟳</span>'}
   </div>`;
@@ -1018,6 +1117,9 @@ function renderLog(){
 
   document.querySelector('.main').innerHTML=`
     <div class="page-title">Session Log</div>
+    ${!state.user ? `<div class="alert-bar info" onclick="app.navigate('settings')" style="cursor:pointer;margin-bottom:12px">
+      👋 <span>Demo data — <u>sign in</u> to see your own sessions.</span>
+    </div>` : ''}
     ${state.syncPending>0?`<div class="alert-bar warning">⟳ ${state.syncPending} session${state.syncPending!==1?'s':''} waiting to sync. <button onclick="app.syncNow()" style="background:none;border:none;color:var(--butter);cursor:pointer;font-weight:700;text-decoration:underline;">Sync now</button></div>`:''}
     <div class="log-filters">
       <input class="filter-input" placeholder="t1 · lunch · >30m · 06-22" id="log-filter" value="${state.logFilter}" oninput="app.setFilter(this.value)"/>
@@ -1099,19 +1201,21 @@ function mealAvgHTML(){
   const counts={}, totals={};
   tags.forEach(t=>{ counts[t]=0; totals[t]=0; });
   allSessions.forEach(s=>{
-    const t=s.meal_tag&&tags.includes(s.meal_tag)?s.meal_tag:null;
+    const t = s.meal_tag && tags.includes(s.meal_tag) ? s.meal_tag : null;
     if(t){ counts[t]++; totals[t]+=s.duration_seconds; }
   });
-  const hasData=tags.some(t=>counts[t]>0);
+  const hasData = tags.some(t=>counts[t]>0);
   if(!hasData) return `<div class="section-title">Avg by Meal</div><p style="font-size:13px;color:var(--text-3)">Tag sessions to see averages.</p>`;
-  const rows=tags.filter(t=>counts[t]>0).map(t=>{
-    const avg=Math.round(totals[t]/counts[t]);
-    const col=avg>=WARN_SECONDS?'var(--peach)':avg>=MAX_OUT_SECONDS?'var(--butter)':'var(--sage)';
+
+  const rows = tags.filter(t=>counts[t]>0).map(t=>{
+    const avg = Math.round(totals[t]/counts[t]);
+    const col = avg >= WARN_SECONDS ? 'var(--peach)' : avg >= MAX_OUT_SECONDS ? 'var(--butter)' : 'var(--sage)';
     return `<div class="insight-row">
       <span class="insight-key">${t.charAt(0).toUpperCase()+t.slice(1)}</span>
       <span class="insight-val" style="color:${col}">${fmtDur(avg)}</span>
     </div>`;
   }).join('');
+
   return `<div class="section-title">Avg by Meal</div>${rows}`;
 }
 
@@ -1142,6 +1246,27 @@ function renderGraphs(){
     </div>`;
   drawCharts();
 }
+function getPaletteColors() {
+  // Use PALETTES definition directly — reliable, no CSS parsing needed
+  // colors array order: [sky, sage, lavender, butter, peach]
+  const p = PALETTES[state.palette] || PALETTES['default'];
+  return {
+    sky:      p.colors[0],
+    sage:     p.colors[1],
+    lavender: p.colors[2],
+    butter:   p.colors[3],
+    peach:    p.colors[4],
+    rose:     p.colors[4], // fallback
+  };
+}
+
+function hexToRgba(hex, alpha) {
+  const r = parseInt(hex.slice(1,3),16);
+  const g = parseInt(hex.slice(3,5),16);
+  const b = parseInt(hex.slice(5,7),16);
+  return `rgba(${r},${g},${b},${alpha})`;
+}
+
 function drawCharts(){
   const allSessions=[...state.sessions,...getOfflineQueue()];
   const last30={};
@@ -1162,12 +1287,16 @@ function drawCharts(){
   const buckets={'<15m':0,'15–30m':0,'30–60m':0,'60–90m':0,'>90m':0};
   allSessions.forEach(s=>{const m=s.duration_seconds/60;if(m<15)buckets['<15m']++;else if(m<30)buckets['15–30m']++;else if(m<60)buckets['30–60m']++;else if(m<90)buckets['60–90m']++;else buckets['>90m']++;});
   if(state.charts.dist)state.charts.dist.destroy();
-  state.charts.dist=new Chart(document.getElementById('chart-dist'),{type:'doughnut',data:{labels:Object.keys(buckets),datasets:[{data:Object.values(buckets),backgroundColor:['rgba(107,191,142,0.8)','rgba(91,175,214,0.75)','rgba(155,142,196,0.75)','rgba(212,168,67,0.75)','rgba(217,123,108,0.8)'],borderWidth:0}]},options:{plugins:{legend:{labels:{color:'#6B6B7A',font:{size:11}}}},responsive:true,maintainAspectRatio:false,cutout:'58%'}});
+  const pc=getPaletteColors();
+  const lc=state.darkMode?'#8892AA':'#6B6B7A';
+  const dc=[hexToRgba(pc.sage,0.85),hexToRgba(pc.sky,0.8),hexToRgba(pc.lavender,0.8),hexToRgba(pc.butter,0.8),hexToRgba(pc.peach,0.85)];
+  state.charts.dist=new Chart(document.getElementById('chart-dist'),{type:'doughnut',data:{labels:Object.keys(buckets),datasets:[{data:Object.values(buckets),backgroundColor:dc,borderWidth:0}]},options:{plugins:{legend:{labels:{color:lc,font:{size:11}}}},responsive:true,maintainAspectRatio:false,cutout:'58%'}});
   const mc={breakfast:0,lunch:0,dinner:0,other:0,none:0};
   allSessions.forEach(s=>{const tag=s.meal_tag&&mc.hasOwnProperty(s.meal_tag)?s.meal_tag:'none';mc[tag]++;});
   const ml=Object.keys(mc).filter(k=>mc[k]>0);
   if(state.charts.meal)state.charts.meal.destroy();
-  state.charts.meal=new Chart(document.getElementById('chart-meal'),{type:'doughnut',data:{labels:ml,datasets:[{data:ml.map(k=>mc[k]),backgroundColor:['rgba(212,168,67,0.8)','rgba(107,191,142,0.8)','rgba(217,123,108,0.8)','rgba(155,142,196,0.75)','rgba(160,160,174,0.5)'],borderWidth:0}]},options:{plugins:{legend:{labels:{color:'#6B6B7A',font:{size:11}}}},responsive:true,maintainAspectRatio:false,cutout:'58%'}});
+  const mc2=[hexToRgba(pc.butter,0.85),hexToRgba(pc.sage,0.85),hexToRgba(pc.peach,0.85),hexToRgba(pc.lavender,0.8),hexToRgba(pc.sky,0.75)];
+  state.charts.meal=new Chart(document.getElementById('chart-meal'),{type:'doughnut',data:{labels:ml,datasets:[{data:ml.map(k=>mc[k]),backgroundColor:mc2,borderWidth:0}]},options:{plugins:{legend:{labels:{color:lc,font:{size:11}}}},responsive:true,maintainAspectRatio:false,cutout:'58%'}});
 }
 
 // ── Calendar ──
@@ -1190,7 +1319,7 @@ function renderCalendar(){
     // dc class goes on the cell itself for full background color
     cells+=`<div class="cal-cell ${ds===todayStr?'today':''} ${dc} ${note?'has-note':''}" onclick="app.openNote('${ds}')">
       <div class="cal-date">${d}</div>
-      ${sec?`<div class="cal-dur">${fmtDur(sec)}</div>`:''}
+      ${sec?`<div class="cal-dur">${fmtCal(sec)}</div>`:''}
     </div>`;
   }
   document.querySelector('.main').innerHTML=`
@@ -1222,107 +1351,6 @@ function refreshView(){
   if(state.view==='graphs')   renderGraphs();
   if(state.view==='calendar') renderCalendar();
   if(state.view==='progress') renderProgress();
-}
-
-function renderSettings(){
-  const overall = typeof overallProgress === 'function' ? overallProgress() : null;
-  const paletteCards = Object.entries(PALETTES).map(([key,p])=>{
-    const swatches = p.colors.map(c=>`<div class="palette-swatch" style="background:${c}"></div>`).join('');
-    return `<div class="palette-card ${state.palette===key?'active':''}" onclick="app.setPalette('${key}')">
-      <div class="palette-swatches">${swatches}</div>
-      <div class="palette-name">${p.name}</div>
-    </div>`;
-  }).join('');
-
-  const trayGrid = Array.from({length:TOTAL_TRAYS},(_,i)=>i+1).map(t=>{
-    const info = state.traySchedule[t];
-    const isCurrent = t===state.currentTray, isDone = t<state.currentTray;
-    const bg = isCurrent?'var(--sky-lt)':isDone?'var(--sage-lt)':'var(--bg-3)';
-    const border = isCurrent?'var(--sky)':isDone?'var(--sage)':'var(--border)';
-    const color = isCurrent?'var(--sky)':isDone?'var(--sage)':'var(--text)';
-    return `<div onclick="app.openTrayScheduleModal(${t})"
-      style="padding:8px 4px;background:${bg};border:1px solid ${border};border-radius:var(--radius-sm);text-align:center;cursor:pointer;">
-      <div style="font-family:'DM Mono',monospace;font-size:12px;font-weight:700;color:${color}">${t}</div>
-      <div style="font-size:9px;color:var(--text-3)">${info?info.days_to_wear+'d':'—'}</div>
-    </div>`;
-  }).join('');
-
-  const userEmail = state.user?.email||'';
-  const userInitial = userEmail ? userEmail[0].toUpperCase() : '?';
-  const authHTML = state.user ? `
-    <div class="card" style="margin-bottom:16px;">
-      <div class="section-title">Account</div>
-      <div class="auth-user-row">
-        <div class="auth-avatar">${userInitial}</div>
-        <div class="auth-info">
-          <div class="auth-email">${userEmail}</div>
-          <div class="auth-status">Signed in · data syncs across devices</div>
-        </div>
-        <button class="auth-logout-btn" onclick="app.signOut()">Sign out</button>
-      </div>
-    </div>` : `
-    <div class="card" style="margin-bottom:16px;">
-      <div class="section-title">Account</div>
-      <p style="font-size:13px;color:var(--text-2);margin-bottom:14px;">Sign in to sync your data across devices.</p>
-      <div class="auth-form">
-        <input class="auth-input" type="email" id="auth-email" placeholder="Email address" autocomplete="email"/>
-        <input class="auth-input" type="password" id="auth-password" placeholder="Password (min 6 characters)"/>
-        <div id="auth-msg"></div>
-        <div class="auth-btn-row">
-          <button class="auth-btn-primary" onclick="app.submitAuth()">${state.authMode==='login'?'Sign In':'Create Account'}</button>
-        </div>
-        <div class="auth-toggle">
-          ${state.authMode==='login'
-            ?`No account? <button onclick="app.toggleAuthMode()">Create one</button>`
-            :`Already have one? <button onclick="app.toggleAuthMode()">Sign in</button>`}
-        </div>
-      </div>
-    </div>`;
-
-  document.querySelector('.main').innerHTML = `
-    <div class="page-title">Settings</div>
-    ${authHTML}
-    <div class="card" style="margin-bottom:16px;">
-      <div class="section-title">Appearance</div>
-      <div class="settings-row">
-        <div><div class="settings-row-label">Dark Mode</div><div class="settings-row-sub">Switch to a dark background</div></div>
-        <label class="toggle">
-          <input type="checkbox" ${state.darkMode?'checked':''} onchange="app.toggleDark(this.checked)"/>
-          <span class="toggle-slider"></span>
-        </label>
-      </div>
-    </div>
-    <div class="card" style="margin-bottom:16px;">
-      <div class="section-title">Color Palette</div>
-      <div class="palette-grid">${paletteCards}</div>
-    </div>
-    <div class="card" style="margin-bottom:16px;">
-      <div class="section-title">Treatment</div>
-      <div class="settings-row">
-        <div><div class="settings-row-label">Total Trays</div><div class="settings-row-sub">Currently ${TOTAL_TRAYS} trays</div></div>
-        <div style="display:flex;gap:8px;align-items:center;">
-          <input class="settings-num" type="number" id="setting-total-trays" min="1" max="99" value="${TOTAL_TRAYS}"/>
-          <button class="settings-save-btn" onclick="app.saveTotalTrays()">Save</button>
-        </div>
-      </div>
-      <div class="settings-row">
-        <div><div class="settings-row-label">Daily Wear Limit</div><div class="settings-row-sub">Max time out per day</div></div>
-        <div style="display:flex;gap:8px;align-items:center;">
-          <input class="settings-num" type="number" id="setting-wear-limit" min="1" max="6" value="${MAX_OUT_SECONDS/3600}" step="0.5" style="width:80px"/>
-          <button class="settings-save-btn" onclick="app.saveWearLimit()">Save</button>
-        </div>
-      </div>
-      ${overall?`<div class="settings-row">
-        <div><div class="settings-row-label">Overall Progress</div>
-        <div class="settings-row-sub">Day ${overall.elapsed} of ${overall.totalDays} · Est. done ${new Date(overall.endDate+'T12:00:00').toLocaleDateString('en-US',{month:'long',year:'numeric'})}</div></div>
-        <div style="font-family:'DM Mono',monospace;font-size:18px;font-weight:700;color:var(--sage)">${overall.pct}%</div>
-      </div>`:''}
-    </div>
-    <div class="card">
-      <div class="section-title">Tray Schedule</div>
-      <button class="sw-btn sw-btn-quick" style="width:100%;padding:9px;margin-bottom:12px;" onclick="app.openSetup()">Auto-generate All ${TOTAL_TRAYS} Trays</button>
-      <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(52px,1fr));gap:6px;">${trayGrid}</div>
-    </div>`;
 }
 
 function render(){
@@ -1368,6 +1396,101 @@ window.app={
   confirmDelete(){if(state.pendingDelete)deleteSession(state.pendingDelete);},
   hideToast,
   syncNow(){syncOfflineQueue();},
+  toggleDark(on){
+    state.darkMode = on;
+    localStorage.setItem('darkMode', on);
+    applyTheme();
+  },
+  setPalette(key){
+    state.palette = key;
+    localStorage.setItem('palette', key);
+    applyTheme();
+    // Re-render palette cards to show active state
+    document.querySelectorAll('.palette-card').forEach(el=>{
+      el.classList.toggle('active', el.getAttribute('onclick').includes(`'${key}'`));
+    });
+    const nameEl = document.querySelector(`.palette-card.active .palette-name`);
+    if(nameEl) nameEl.style.color='var(--sky)';
+  },
+  async saveTotalTrays(){
+    const v = parseInt(document.getElementById('setting-total-trays')?.value)||36;
+    TOTAL_TRAYS = v;
+    await saveSetting('total_trays', v);
+    showToastMessage(`✓ Total trays updated to ${v}`);
+    renderSettings();
+  },
+  saveWearLimit(){
+    const v = parseFloat(document.getElementById('setting-wear-limit')?.value)||2;
+    localStorage.setItem('wearLimit', v);
+    showToastMessage(`✓ Wear limit set to ${v}h — takes effect on next load`);
+  },
+  toggleAuthMode(){
+    state.authMode = state.authMode==='login' ? 'signup' : 'login';
+    renderSettings();
+    setTimeout(()=>document.getElementById('auth-email')?.focus(), 50);
+  },
+  async submitAuth(){
+    const email = document.getElementById('auth-email')?.value?.trim();
+    const password = document.getElementById('auth-password')?.value;
+    const msgEl = document.getElementById('auth-msg');
+    const setMsg = (html) => { if(msgEl) msgEl.innerHTML = html; };
+
+    if(!email || !password)  { setMsg('<div class="auth-error">Please enter your email and password.</div>'); return; }
+    if(password.length < 6)  { setMsg('<div class="auth-error">Password must be at least 6 characters.</div>'); return; }
+
+    setMsg('<div style="font-size:12px;color:var(--text-3)">Please wait...</div>');
+
+    let result;
+    if(state.authMode === 'login') {
+      result = await db.auth.signInWithPassword({email, password});
+      if(result.error) {
+        setMsg('<div class="auth-error">Incorrect email or password.</div>');
+        return;
+      }
+    } else {
+      result = await db.auth.signUp({email, password});
+      if(result.error) {
+        setMsg(`<div class="auth-error">${result.error.message}</div>`);
+        return;
+      }
+      if(!result.data.session) {
+        // Email confirmation is enabled in Supabase
+        // Switch to login mode and show clear message
+        state.authMode = 'login';
+        setMsg('<div class="auth-success">Account created! Check your email for a confirmation link, then sign in here.</div>');
+        renderSettings();
+        // Re-inject the message since renderSettings rebuilds the DOM
+        setTimeout(()=>{
+          const m = document.getElementById('auth-msg');
+          if(m) m.innerHTML = '<div class="auth-success">Account created! Check your email to confirm, then sign in.</div>';
+        }, 50);
+        return;
+      }
+    }
+    state.user = result.data.user || result.data.session?.user;
+    // Claim any existing null user_id data for this new user
+    if(state.user && state.isOnline) {
+      const uid2 = state.user.id;
+      await Promise.all([
+        db.from('sessions').update({user_id:uid2}).is('user_id',null),
+        db.from('settings').update({user_id:uid2}).is('user_id',null),
+        db.from('daily_notes').update({user_id:uid2}).is('user_id',null),
+        db.from('tray_schedule').update({user_id:uid2}).is('user_id',null),
+      ]);
+    }
+    await loadAll();
+    render();
+    showToastMessage('✓ Signed in successfully');
+  },
+  async signOut(){
+    await db.auth.signOut();
+    state.user = null;
+    state.sessions = [];
+    state.notes = {};
+    state.traySchedule = {};
+    state.currentTray = 1;
+    render();
+  },
   openEditMeal: openEditMealModal,
   selectEditMeal(meal){ window.app_selectEditMeal(meal); },
   saveEditMeal,
@@ -1382,12 +1505,11 @@ window.app={
 // ── Boot ──
 async function init(){
   try{
-    await getUser();
     state.syncPending=getOfflineQueue().length;
+    await getUser(); // load auth state first
     await loadAll();
     restoreTimer();
     render();
-    // Try to sync any pending sessions on load
     if(state.isOnline&&state.syncPending>0) await syncOfflineQueue();
   } catch(e){
     document.getElementById('app').innerHTML=`<div style="text-align:center;padding:60px;color:var(--peach);"><p>⚠ Could not load app.</p><p style="font-size:13px;color:var(--text-2);margin-top:8px;">${e.message}</p></div>`;
@@ -1432,4 +1554,112 @@ window.app.installPWA = async () => {
 window.addEventListener('appinstalled', () => {
   document.getElementById('install-banner')?.remove();
   deferredInstallPrompt = null;
-});
+});function renderSettings(){
+  const overall = overallProgress();
+  const trayGrid = Array.from({length:TOTAL_TRAYS},(_,i)=>i+1).map(t=>{
+    const info = state.traySchedule[t];
+    const isCurrent = t === state.currentTray;
+    const isDone = t < state.currentTray;
+    const bg = isCurrent ? 'var(--sky-lt)' : isDone ? 'var(--sage-lt)' : 'var(--bg-3)';
+    const border = isCurrent ? 'var(--sky)' : isDone ? 'var(--sage)' : 'var(--border)';
+    const color = isCurrent ? 'var(--sky)' : isDone ? 'var(--sage)' : 'var(--text)';
+    return `<div onclick="app.openTrayScheduleModal(${t})"
+      style="padding:8px 4px;background:${bg};border:1px solid ${border};
+      border-radius:var(--radius-sm);text-align:center;cursor:pointer;">
+      <div style="font-family:'DM Mono',monospace;font-size:12px;font-weight:700;color:${color}">${t}</div>
+      <div style="font-size:9px;color:var(--text-3)">${info ? info.days_to_wear+'d' : '—'}</div>
+    </div>`;
+  }).join('');
+
+  const paletteCards = Object.entries(PALETTES).map(([key,p])=>{
+    const swatches = p.colors.map(c=>`<div class="palette-swatch" style="background:${c}"></div>`).join('');
+    return `<div class="palette-card ${state.palette===key?'active':''}" onclick="app.setPalette('${key}')">
+      <div class="palette-swatches">${swatches}</div>
+      <div class="palette-name">${p.name}</div>
+    </div>`;
+  }).join('');
+
+  const userEmail = state.user?.email || '';
+  const userInitial = userEmail ? userEmail[0].toUpperCase() : '?';
+
+  const authHTML = state.user ? `
+    <div class="card auth-section" style="margin-bottom:16px;">
+      <div class="section-title">Account</div>
+      <div class="auth-user-row">
+        <div class="auth-avatar">${userInitial}</div>
+        <div class="auth-info">
+          <div class="auth-email">${userEmail}</div>
+          <div class="auth-status">Signed in · data syncs across devices</div>
+        </div>
+        <button class="auth-logout-btn" onclick="app.signOut()">Sign out</button>
+      </div>
+    </div>` : `
+    <div class="card auth-section" style="margin-bottom:16px;">
+      <div class="section-title">Account</div>
+      <p style="font-size:13px;color:var(--text-2);margin-bottom:14px;">Sign in to sync your data across devices and keep it safe.</p>
+      <div class="auth-form" id="auth-form">
+        <input class="auth-input" type="email" id="auth-email" placeholder="Email address" autocomplete="email"/>
+        <input class="auth-input" type="password" id="auth-password" placeholder="Password (min 6 characters)" autocomplete="${state.authMode==='login'?'current-password':'new-password'}"/>
+        <div id="auth-msg"></div>
+        <div class="auth-btn-row">
+          <button class="auth-btn-primary" onclick="app.submitAuth()">${state.authMode==='login'?'Sign In':'Create Account'}</button>
+        </div>
+        <div class="auth-toggle">
+          ${state.authMode==='login'
+            ?`No account? <button onclick="app.toggleAuthMode()">Create one</button>`
+            :`Already have one? <button onclick="app.toggleAuthMode()">Sign in</button>`}
+        </div>
+      </div>
+    </div>`;
+
+  document.querySelector('.main').innerHTML = `
+    <div class="page-title">Settings</div>
+    ${authHTML}
+    <div class="card" style="margin-bottom:16px;">
+      <div class="section-title">Appearance</div>
+      <div class="settings-row">
+        <div><div class="settings-row-label">Dark Mode</div><div class="settings-row-sub">Switch to a dark background</div></div>
+        <label class="toggle">
+          <input type="checkbox" ${state.darkMode?'checked':''} onchange="app.toggleDark(this.checked)"/>
+          <span class="toggle-slider"></span>
+        </label>
+      </div>
+    </div>
+
+    <div class="card" style="margin-bottom:16px;">
+      <div class="section-title">Color Palette</div>
+      <div class="palette-grid">${paletteCards}</div>
+    </div>
+
+    <div class="card" style="margin-bottom:16px;">
+      <div class="section-title">Treatment</div>
+      <div class="settings-row">
+        <div><div class="settings-row-label">Total Trays</div><div class="settings-row-sub">Currently ${TOTAL_TRAYS} trays</div></div>
+        <div style="display:flex;gap:8px;align-items:center;">
+          <input class="settings-num" type="number" id="setting-total-trays" min="1" max="99" value="${TOTAL_TRAYS}"/>
+          <button class="settings-save-btn" onclick="app.saveTotalTrays()">Save</button>
+        </div>
+      </div>
+      <div class="settings-row">
+        <div><div class="settings-row-label">Daily Wear Limit</div><div class="settings-row-sub">Max time out per day</div></div>
+        <div style="display:flex;gap:8px;align-items:center;">
+          <input class="settings-num" type="number" id="setting-wear-limit" min="1" max="6" value="${MAX_OUT_SECONDS/3600}" step="0.5" style="width:80px"/>
+          <button class="settings-save-btn" onclick="app.saveWearLimit()">Save</button>
+        </div>
+      </div>
+      ${overall ? `<div class="settings-row">
+        <div><div class="settings-row-label">Overall Progress</div>
+        <div class="settings-row-sub">Day ${overall.elapsed} of ${overall.totalDays} · Est. done ${new Date(overall.endDate+'T12:00:00').toLocaleDateString('en-US',{month:'long',year:'numeric'})}</div></div>
+        <div style="font-family:'DM Mono',monospace;font-size:18px;font-weight:700;color:var(--sage)">${overall.pct}%</div>
+      </div>` : ''}
+    </div>
+
+    <div class="card">
+      <div class="section-title">Tray Schedule</div>
+      
+      <button class="sw-btn sw-btn-quick" style="width:100%;padding:9px;margin-bottom:12px;" onclick="app.openSetup()">Auto-generate All ${TOTAL_TRAYS} Trays</button>
+      <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(52px,1fr));gap:6px;">${trayGrid}</div>
+    </div>`;
+}
+
+
